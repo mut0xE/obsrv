@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "obsrv-core",
+    "obsrv-api",
+]
+resolver = "2"
