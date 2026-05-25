@@ -2,25 +2,38 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum ObsrvError {
-    // input decoding errors
+    // input errors
+    #[error("empty input provided")]
+    EmptyInput,
+
+    #[error("input too large (max 10000 chars)")]
+    InputTooLarge,
+
+    #[error("transaction too large (max 4096 bytes)")]
+    TransactionTooLarge,
+
+    // transaction errors
+    #[error("transaction has no instructions")]
+    NoInstructions,
+
+    #[error("transaction has no accounts")]
+    NoAccounts,
+
+    #[error("invalid account index: {0}")]
+    InvalidAccountIndex(usize),
+
+    // decode errors
     #[error("base64 decode failed: {0}")]
     Base64DecodeFailed(String),
 
     #[error("base58 decode failed: {0}")]
     Base58DecodeFailed(String),
 
-    #[error("empty input provided")]
-    EmptyInput,
-
-    // transaction errors
-    #[error("transaction deserialization failed: {0}")]
+    #[error("deserialization failed: {0}")]
     DeserializationFailed(String),
 
-    #[error("transaction has no instructions")]
-    NoInstructions,
-
-    #[error("invalid account index: {0}")]
-    InvalidAccountIndex(usize),
+    #[error("wrong input type: {0}")]
+    WrongInputType(String),
 
     // nonce errors
     #[error("nonce account not found: {0}")]
