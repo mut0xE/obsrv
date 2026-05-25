@@ -24,7 +24,7 @@ pub fn decode(
     println!("ix type:{}", ix_type);
     match ix_type {
         0 => create_account(index, data, accounts, account_keys),
-        // 2 => transfer(index, data, accounts, account_keys),
+        2 => transfer(index, data, accounts, account_keys),
         // 4 => nonce_advance(index, accounts, account_keys),
         // 5 => nonce_withdraw(index, data, accounts, account_keys),
         // 6 => nonce_initialize(index, accounts, account_keys),
@@ -89,6 +89,56 @@ fn create_account(
         index,
         program: ProgramType::System,
         instruction_type: InstructionType::CreateAccount,
+        details,
+        is_nonce_advance: false,
+        risk_flags,
+        severity,
+    }
+}
+
+// TYPE 2: Transfer
+// moves SOL from one account to another
+/*
+data layout:
+[0..4]  = discriminator (2, 0, 0, 0)
+[4..12] = lamports as u64 little endian
+*/
+fn transfer(
+    index: usize,
+    data: &[u8],
+    accounts: &[u8],
+    account_keys: &[String],
+) -> DecodedInstruction {
+    let from = get_account(accounts, 0, account_keys);
+    let to = get_account(accounts, 1, account_keys);
+
+    // lamports at bytes 4-11
+    let lamports = read_u64(data, 4);
+
+    let sol = lamports as f64 / LAMPORTS_PER_SOL as f64;
+    println!("sol:{}", sol);
+
+    let mut details = HashMap::new();
+    details.insert("from".to_string(), from);
+    details.insert("to".to_string(), to);
+    details.insert("lamports".to_string(), lamports.to_string());
+    details.insert("sol".to_string(), format!("{:.6}", sol));
+
+    let (risk_flags, severity) = if lamports > 10 * LAMPORTS_PER_SOL {
+        (
+            vec![
+                format!("LARGE TRANSFER: {:.2} SOL", sol),
+                "verify recipient address carefully".to_string(),
+            ],
+            Severity::Warning,
+        )
+    } else {
+        (vec![], Severity::None)
+    };
+    DecodedInstruction {
+        index,
+        program: ProgramType::System,
+        instruction_type: InstructionType::Transfer,
         details,
         is_nonce_advance: false,
         risk_flags,
@@ -188,5 +238,23 @@ mod tests {
                 .any(|f| f.contains("NONCE ACCOUNT CREATION"))
         );
         println!("nonce creation flagged: {:?}", result.risk_flags);
+    }
+
+    #[test]
+    fn test_transfer_small_amount() {
+        // type 2, 1_000_000 lamports = 0.001 SOL
+        let data = [2, 0, 0, 0, 64, 66, 15, 0, 0, 0, 0, 0];
+        let accounts = [0u8, 1u8];
+        let keys = test_accounts();
+
+        let result = decode(0, &data, &accounts, &keys);
+        println!("transfer result:{:#?}", result);
+
+        assert!(result.risk_flags.is_empty());
+        assert_eq!(result.details["sol"], "0.001000");
+        assert_eq!(result.details["lamports"], "1000000");
+        assert_eq!(result.details["from"], keys[0]); // sender
+        assert_eq!(result.details["to"], keys[1]); // receiver
+        println!("transfer: {:?}", result.details);
     }
 }
