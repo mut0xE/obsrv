@@ -21,16 +21,11 @@ pub fn decode(
     // read instruction type from first 4 bytes
     // System Program uses u32 little endian
     let ix_type = u32::from_le_bytes(data[..4].try_into().unwrap_or([0; 4]));
-    println!("ix type:{}", ix_type);
     match ix_type {
         0 => create_account(index, data, accounts, account_keys),
         2 => transfer(index, data, accounts, account_keys),
-        // 4 => nonce_advance(index, accounts, account_keys),
-        // 5 => nonce_withdraw(index, data, accounts, account_keys),
-        // 6 => nonce_initialize(index, accounts, account_keys),
-        // 7 => nonce_authorize(index, accounts, account_keys),
-        // _ => unknown_system(index, ix_type),
-        _ => todo!(),
+        4 => nonce_advance(index, accounts, account_keys),
+        _ => unknown_system(index, ix_type),
     }
 }
 
@@ -50,20 +45,24 @@ fn create_account(
     accounts: &[u8],
     account_keys: &[String],
 ) -> DecodedInstruction {
+    // CreateAccount needs at least 52 bytes: 4 disc + 8 lamports + 8 space + 32 owner
+    if data.len() < 52 {
+        return invalid(index);
+    }
+
     let from = get_account(accounts, 0, account_keys);
     let new_account = get_account(accounts, 1, account_keys);
-    println!("from:{}", from);
-    println!("new_account:{}", new_account);
 
     // lamports at bytes 4-11
     let lamports = read_u64(data, 4);
 
     // space at bytes 12-19
     let space = read_u64(data, 12);
-    println!("space:{}", space);
+
+    // owner program id at bytes 20-51
+    let owner = bs58::encode(&data[20..52]).into_string();
 
     let sol = lamports as f64 / LAMPORTS_PER_SOL as f64;
-    println!("sol:{}", sol);
 
     let mut details = HashMap::new();
     details.insert("from".to_string(), from);
@@ -71,6 +70,7 @@ fn create_account(
     details.insert("lamports".to_string(), lamports.to_string());
     details.insert("sol".to_string(), format!("{:.6}", sol));
     details.insert("space_bytes".to_string(), space.to_string());
+    details.insert("owner".to_string(), owner);
 
     // 80 bytes = nonce account being created
     let (risk_flags, severity) = if space == 80 {
@@ -109,6 +109,11 @@ fn transfer(
     accounts: &[u8],
     account_keys: &[String],
 ) -> DecodedInstruction {
+    // Transfer needs at least 12 bytes: 4 disc + 8 lamports
+    if data.len() < 12 {
+        return invalid(index);
+    }
+
     let from = get_account(accounts, 0, account_keys);
     let to = get_account(accounts, 1, account_keys);
 
@@ -116,7 +121,6 @@ fn transfer(
     let lamports = read_u64(data, 4);
 
     let sol = lamports as f64 / LAMPORTS_PER_SOL as f64;
-    println!("sol:{}", sol);
 
     let mut details = HashMap::new();
     details.insert("from".to_string(), from);
@@ -146,6 +150,48 @@ fn transfer(
     }
 }
 
+// TYPE 4: NonceAdvance
+// THE KEY DURABLE NONCE SIGNAL
+// instruction[0] being nonceAdvance = tx never expires
+/// # Account references
+///   0. `[WRITE]` Nonce account
+///   1. `[]` RecentBlockhashes sysvar
+///   2. `[SIGNER]` Nonce authority
+fn nonce_advance(index: usize, accounts: &[u8], account_keys: &[String]) -> DecodedInstruction {
+    let nonce_account = get_account(accounts, 0, account_keys);
+    let authority = get_account(accounts, 2, account_keys);
+
+    let mut details = HashMap::new();
+    details.insert("nonce_account".to_string(), nonce_account);
+
+    details.insert("authority".to_string(), authority);
+
+    details.insert(
+        "warning".to_string(),
+        "this transaction uses a durable nonce and may remain valid until the nonce is consumed"
+            .to_string(),
+    );
+
+    DecodedInstruction {
+        index,
+        program: ProgramType::System,
+        instruction_type: InstructionType::NonceAdvance,
+        details,
+
+        is_nonce_advance: true,
+
+        risk_flags: vec![
+            "DURABLE NONCE DETECTED".to_string(),
+            "transaction validity is not time-limited like normal blockhash transactions"
+                .to_string(),
+            "transaction can remain executable until nonce is advanced".to_string(),
+            "review delayed execution risk".to_string(),
+        ],
+
+        severity: Severity::Critical,
+    }
+}
+
 /// read u64 little endian from data at offset
 fn read_u64(data: &[u8], offset: usize) -> u64 {
     if data.len() >= offset + 8 {
@@ -162,6 +208,22 @@ fn get_account(accounts: &[u8], position: usize, account_keys: &[String]) -> Str
         .and_then(|&idx| account_keys.get(idx as usize))
         .cloned()
         .unwrap_or_else(|| "unknown".to_string())
+}
+
+/// unhandled system instruction type
+fn unknown_system(index: usize, ix_type: u32) -> DecodedInstruction {
+    let mut details = HashMap::new();
+    details.insert("ix_type".to_string(), ix_type.to_string());
+
+    DecodedInstruction {
+        index,
+        program: ProgramType::System,
+        instruction_type: InstructionType::Unknown(format!("system_ix_{}", ix_type)),
+        details,
+        is_nonce_advance: false,
+        risk_flags: vec![format!("unhandled system instruction type: {}", ix_type)],
+        severity: Severity::Warning,
+    }
 }
 
 /// invalid instruction data
@@ -256,5 +318,32 @@ mod tests {
         assert_eq!(result.details["from"], keys[0]); // sender
         assert_eq!(result.details["to"], keys[1]); // receiver
         println!("transfer: {:?}", result.details);
+    }
+
+    #[test]
+    fn test_nonce_advance_detected() {
+        // type 4 = nonceAdvance
+        let data = [4, 0, 0, 0];
+        let accounts = [3u8, 5u8, 1u8];
+        let keys = vec![
+            "11111114d3RrygbPdAtMuFnDmzsN8T5fYKVQ7FVr7".to_string(),
+            "11111115q4EpJaTXAZWpCg3J2zppWGSZ46KXozzo9".to_string(),
+            "111111152P2r5yt6odmBLPsFCLBrFisJ3aS7LqLAT".to_string(),
+            "11111115RidqCHAoz6dzmXxGcfWLNzevYqNpaRAUo".to_string(),
+            "11111111111111111111111111111111".to_string(),
+            "SysvarRecentB1ockHashes11111111111111111111".to_string(),
+        ];
+
+        let result = decode(0, &data, &accounts, &keys);
+
+        assert!(result.is_nonce_advance);
+        assert_eq!(result.severity, Severity::Critical);
+        assert!(
+            result
+                .risk_flags
+                .iter()
+                .any(|f| f.contains("DURABLE NONCE DETECTED"))
+        );
+        println!("nonce advance: {:#?}", result);
     }
 }
