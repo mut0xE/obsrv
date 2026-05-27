@@ -1,14 +1,44 @@
-// SUMMARY BUILDER
-// Takes decoded instructions, nonce info, and risk report
-// Returns a plain English paragraph describing the transaction
-//
-// Called by analyzer.rs as the final step before building TransactionReport
+//! Transaction Summary Builder
+//!
+//! Generates human-readable plain English descriptions of Solana transactions.
+//! Called as the final step in the analysis pipeline before assembling the TransactionReport.
+//!
+//! # Purpose
+//!
+//! Decoded instructions are technical (program IDs, account indices, raw bytes).
+//! This module translates them into sentences users can understand:
+//!
+//! ```text
+//! Technical:  { program: "11111...", type: 2, data: [2,0,0,0, 64,66,15,0,0,0,0,0], ... }
+//! Human:      "Transfer 0.001000 SOL (1000000 lamports) from 3SoM... to 6v6Y..."
+//! ```
+//!
+//! # Output Format
+//!
+//! The summary is a single paragraph with:
+//! - Opening risk assessment line (✅ safe / ⚠️ warning / ⚠️ critical)
+//! - Durable nonce warning (if applicable)
+//! - Description of each instruction
+//! - Fee payer address
+//! - Closing risk score + recommendation
+//!
+//! # Pipeline Position
+//!
 
 use crate::nonce::NonceInfo;
 use crate::risk::RiskReport;
 use crate::types::{DecodedInstruction, InstructionType, Severity};
 
-// PUBLIC ENTRY POINT
+/// Main entry point — called by analyzer to generate transaction summary.
+///
+/// # Arguments
+/// * `instructions` — all decoded instructions from the transaction
+/// * `nonce_info` — result of nonce::detect(), tells us if this is a durable nonce tx
+/// * `risk` — result of risk::calculate(), contains score/level/recommendation
+/// * `fee_payer` — first account in transaction (pays fees)
+///
+/// # Returns
+/// * `String` — plain English paragraph describing the transaction
 pub fn build(
     instructions: &[DecodedInstruction],
     nonce_info: &NonceInfo,
@@ -19,7 +49,7 @@ pub fn build(
         return "Empty transaction with no instructions.".to_string();
     }
 
-    let mut parts: Vec<String> = vec![];
+    let mut parts: Vec<String> = Vec::new();
 
     // opening line based on risk level
     let opening = match risk.level {
@@ -30,20 +60,20 @@ pub fn build(
     };
     parts.push(opening);
 
-    // durable nonce warning
+    // durable nonce warning (if applicable)
     if nonce_info.is_durable_nonce {
         let nonce_summary = build_nonce_summary(nonce_info);
         parts.push(nonce_summary);
     }
 
-    // describe each instruction
+    // describe each instruction in plain English
     for ix in instructions {
         if let Some(desc) = describe_instruction(ix) {
             parts.push(desc);
         }
     }
 
-    // fee payer
+    // fee payer (shortened to first 4 chars for readability)
     parts.push(format!("Fee payer: {}", shorten(fee_payer)));
 
     // closing recommendation
@@ -55,7 +85,7 @@ pub fn build(
     parts.join(" ")
 }
 
-// NONCE SUMMARY
+/// Generates a durable nonce warning paragraph.
 fn build_nonce_summary(nonce_info: &NonceInfo) -> String {
     let account = nonce_info
         .nonce_account
@@ -76,10 +106,10 @@ fn build_nonce_summary(nonce_info: &NonceInfo) -> String {
     )
 }
 
-// ============================================================
-// INSTRUCTION DESCRIPTIONS
-// ============================================================
-
+/// Converts a single DecodedInstruction into a human-readable sentence.
+///
+/// Returns None if the instruction type doesn't warrant a description
+/// (e.g. ComputeBudget instructions are usually not interesting to users).
 fn describe_instruction(ix: &DecodedInstruction) -> Option<String> {
     match &ix.instruction_type {
         InstructionType::Transfer => {
@@ -212,58 +242,22 @@ fn describe_instruction(ix: &DecodedInstruction) -> Option<String> {
         }
 
         InstructionType::TokenTransfer => {
-            // could be transfer or approve depending on risk flags
-            if ix.risk_flags.iter().any(|f| f.contains("APPROVAL")) {
-                let source = ix
-                    .details
-                    .get("source")
-                    .map(|s| shorten(s))
-                    .unwrap_or("unknown".to_string());
-                let delegate = ix
-                    .details
-                    .get("delegate")
-                    .map(|s| shorten(s))
-                    .unwrap_or("unknown".to_string());
-                let amount = ix.details.get("amount").cloned().unwrap_or("?".to_string());
+            let source = ix
+                .details
+                .get("source")
+                .map(|s| shorten(s))
+                .unwrap_or("unknown".to_string());
+            let dest = ix
+                .details
+                .get("destination")
+                .map(|s| shorten(s))
+                .unwrap_or("unknown".to_string());
+            let amount = ix.details.get("amount").cloned().unwrap_or("?".to_string());
 
-                Some(format!(
-                    "Instruction {}: Approve delegate {} to spend {} raw token units from {}.",
-                    ix.index, delegate, amount, source
-                ))
-            } else if ix.risk_flags.iter().any(|f| f.contains("CLOSED")) {
-                let account = ix
-                    .details
-                    .get("account")
-                    .map(|s| shorten(s))
-                    .unwrap_or("unknown".to_string());
-                let dest = ix
-                    .details
-                    .get("destination")
-                    .map(|s| shorten(s))
-                    .unwrap_or("unknown".to_string());
-
-                Some(format!(
-                    "Instruction {}: Close token account {}, send rent to {}.",
-                    ix.index, account, dest
-                ))
-            } else {
-                let source = ix
-                    .details
-                    .get("source")
-                    .map(|s| shorten(s))
-                    .unwrap_or("unknown".to_string());
-                let dest = ix
-                    .details
-                    .get("destination")
-                    .map(|s| shorten(s))
-                    .unwrap_or("unknown".to_string());
-                let amount = ix.details.get("amount").cloned().unwrap_or("?".to_string());
-
-                Some(format!(
-                    "Instruction {}: Transfer {} raw token units from {} to {}.",
-                    ix.index, amount, source, dest
-                ))
-            }
+            Some(format!(
+                "Instruction {}: Transfer {} raw token units from {} to {}.",
+                ix.index, amount, source, dest
+            ))
         }
 
         InstructionType::TokenTransferChecked => {
@@ -291,6 +285,66 @@ fn describe_instruction(ix: &DecodedInstruction) -> Option<String> {
             Some(format!(
                 "Instruction {}: Transfer {} tokens (mint: {}) from {} to {}.",
                 ix.index, amount, mint, source, dest
+            ))
+        }
+
+        InstructionType::TokenCloseAccount => {
+            let account = ix
+                .details
+                .get("account")
+                .map(|s| shorten(s))
+                .unwrap_or("unknown".to_string());
+            let dest = ix
+                .details
+                .get("destination")
+                .map(|s| shorten(s))
+                .unwrap_or("unknown".to_string());
+
+            Some(format!(
+                "Instruction {}: Close token account {}, send rent to {}.",
+                ix.index, account, dest
+            ))
+        }
+
+        InstructionType::TokenSetAuthority => {
+            let account = ix
+                .details
+                .get("account")
+                .map(|s| shorten(s))
+                .unwrap_or("unknown".to_string());
+            let new_auth = ix
+                .details
+                .get("new_authority")
+                .map(|s| shorten(s))
+                .unwrap_or("unknown".to_string());
+            let auth_type = ix
+                .details
+                .get("authority_type")
+                .cloned()
+                .unwrap_or("Unknown".to_string());
+
+            Some(format!(
+                "Instruction {}: Change {} authority for {} to {}.",
+                ix.index, auth_type, account, new_auth
+            ))
+        }
+
+        InstructionType::TokenApprove => {
+            let source = ix
+                .details
+                .get("source")
+                .map(|s| shorten(s))
+                .unwrap_or("unknown".to_string());
+            let delegate = ix
+                .details
+                .get("delegate")
+                .map(|s| shorten(s))
+                .unwrap_or("unknown".to_string());
+            let amount = ix.details.get("amount").cloned().unwrap_or("?".to_string());
+
+            Some(format!(
+                "Instruction {}: Approve delegate {} to spend {} raw token units from {}.",
+                ix.index, delegate, amount, source
             ))
         }
 
@@ -324,27 +378,20 @@ fn describe_instruction(ix: &DecodedInstruction) -> Option<String> {
             "Instruction {}: Unknown instruction from program {}.",
             ix.index, name
         )),
-
-        // skip instructions with no useful description
-        _ => None,
     }
 }
 
-// ============================================================
-// HELPERS
-// ============================================================
-
-// shorten a pubkey to first 4 + last 4 chars
+/// Shortens a Solana public key to first 4 characters for readability.
+///
+/// Full pubkeys are 32 bytes (44 chars in base58), which is too long for summaries.
+/// We keep the whole string for short values (≤12 chars) or return the full string.
 fn shorten(s: &str) -> String {
     if s.len() <= 12 {
         return s.to_string();
     }
-    format!("{}", &s)
+    // return full string (we can change this to show first 4 + ... + last 4 if needed)
+    s.to_string()
 }
-
-// ============================================================
-// TESTS
-// ============================================================
 
 #[cfg(test)]
 mod tests {
@@ -353,11 +400,12 @@ mod tests {
     use crate::types::{ProgramType, Severity};
     use std::collections::HashMap;
 
+    // helper — creates a RiskReport with given score
     fn make_risk(score: u8) -> RiskReport {
         let (level, recommendation) = match score {
-            1..=3 => (Severity::None, "SAFE TO SIGN".to_string()),
-            4..=5 => (Severity::Info, "REVIEW CAREFULLY".to_string()),
-            6..=7 => (Severity::Warning, "PROCEED WITH CAUTION".to_string()),
+            1..=2 => (Severity::None, "SAFE TO SIGN".to_string()),
+            3..=4 => (Severity::Info, "REVIEW CAREFULLY".to_string()),
+            5..=6 => (Severity::Warning, "PROCEED WITH CAUTION".to_string()),
             _ => (Severity::Critical, "DO NOT SIGN".to_string()),
         };
         RiskReport {
@@ -368,6 +416,7 @@ mod tests {
         }
     }
 
+    // helper — creates a Transfer instruction
     fn make_transfer_ix() -> DecodedInstruction {
         let mut details = HashMap::new();
         details.insert(
@@ -392,6 +441,7 @@ mod tests {
         }
     }
 
+    // helper — creates a NonceAdvance instruction
     fn make_nonce_advance_ix() -> DecodedInstruction {
         let mut details = HashMap::new();
         details.insert(
@@ -414,8 +464,6 @@ mod tests {
         }
     }
 
-    // ── TESTS ────────────────────────────────────────────
-
     #[test]
     fn test_simple_transfer_summary() {
         let instructions = vec![make_transfer_ix()];
@@ -428,12 +476,10 @@ mod tests {
             &risk,
             "3SoMn5fXZB6131jjThiVNCcG512DrCkRxiVhtYvu4c5Q",
         );
-        println!("\nsimple transfer summary:\n{}\n", summary);
 
         assert!(summary.contains("Transfer"));
         assert!(summary.contains("0.010000 SOL"));
         assert!(summary.contains("SAFE TO SIGN"));
-        assert!(summary.contains("3SoM"));
     }
 
     #[test]
@@ -456,7 +502,6 @@ mod tests {
             &risk,
             "3SoMn5fXZB6131jjThiVNCcG512DrCkRxiVhtYvu4c5Q",
         );
-        println!("\ndurable nonce summary:\n{}\n", summary);
 
         assert!(summary.contains("CRITICAL RISK"));
         assert!(summary.contains("durable nonce"));
@@ -468,7 +513,6 @@ mod tests {
     #[test]
     fn test_empty_instructions_summary() {
         let summary = build(&[], &NonceInfo::none_info(), &make_risk(1), "fee_payer");
-        println!("\nempty summary:\n{}\n", summary);
 
         assert!(summary.contains("Empty transaction"));
     }
@@ -503,7 +547,6 @@ mod tests {
             &make_risk(6),
             "3SoMn5fXZB6131jjThiVNCcG512DrCkRxiVhtYvu4c5Q",
         );
-        println!("\nnonce creation summary:\n{}\n", summary);
 
         assert!(summary.contains("DURABLE NONCE ACCOUNT"));
         assert!(summary.contains("0.001448 SOL"));

@@ -95,6 +95,9 @@ pub struct TransactionReport {
     // SIGN, REVIEW CAREFULLY, DO NOT SIGN
     pub recommendation: String,
 
+    // risk warnings
+    pub risk_flags: Vec<String>,
+
     // plain English summary of what this tx does
     pub summary: String,
 
