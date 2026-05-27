@@ -149,6 +149,10 @@ pub struct ForensicsResponse {
     pub execution_status: String,
     /// before/after changes for each account
     pub account_diffs: Vec<AccountDiff>,
+    pub failure_reason: Option<String>,
+    pub cu_consumed: Option<u64>,
+    pub fee_lamports: u64,
+    pub logs: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -162,6 +166,7 @@ pub struct AccountDiff {
     pub before_tokens: Option<String>,
     /// token balance after if token account
     pub after_tokens: Option<String>,
+    pub change_lamports: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

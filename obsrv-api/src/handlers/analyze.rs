@@ -1,13 +1,16 @@
-use axum::Json;
+use axum::{Json, extract::State};
 use obsrv_core::{
     analyzer,
     decoder::decode_payload,
     types::{AnalyzeResponse, AnalyzeTxRequest},
 };
 
-use crate::errors::ApiError;
+use crate::{errors::ApiError, state::AppState};
 
-pub async fn handle(Json(req): Json<AnalyzeTxRequest>) -> Result<Json<AnalyzeResponse>, ApiError> {
+pub async fn handle(
+    State(_state): State<AppState>,
+    Json(req): Json<AnalyzeTxRequest>,
+) -> Result<Json<AnalyzeResponse>, ApiError> {
     tracing::info!(input_len = req.raw_tx.len(), "POST /analyze");
 
     // step 1: decode raw bytes

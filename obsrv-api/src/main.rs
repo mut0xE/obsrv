@@ -3,17 +3,29 @@ use axum::{
     routing::{get, post},
 };
 use tower_http::cors::{Any, CorsLayer};
+use tracing_subscriber::EnvFilter;
 
-use crate::handlers::{analyze, health};
+use crate::{
+    config::Config,
+    handlers::{analyze, forensics, health},
+    state::AppState,
+};
 
+mod config;
 mod errors;
 mod handlers;
+mod state;
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok();
 
     // init logging
-    tracing_subscriber::fmt().with_env_filter("info").init();
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .init();
+
+    let config = Config::from_env();
+    let state = AppState::new(config);
 
     let cors = CorsLayer::new()
         .allow_origin(Any)
@@ -21,8 +33,10 @@ async fn main() {
         .allow_methods(Any);
 
     let app = Router::new()
-        .route("/health", get(handlers::health::handle))
-        .route("/analyze", post(handlers::analyze::handle))
+        .route("/health", get(health::handle))
+        .route("/analyze", post(analyze::handle))
+        .route("/forensics", post(forensics::handle))
+        .with_state(state)
         .layer(cors);
 
     let addr = "0.0.0.0:3001";
