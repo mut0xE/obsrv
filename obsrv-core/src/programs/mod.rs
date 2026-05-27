@@ -21,8 +21,9 @@ pub fn decode_instruction(
 ) -> DecodedInstruction {
     match program_id {
         SYSTEM_PROGRAM => system::decode(index, data, accounts, account_keys),
-        SPL_TOKEN => todo!(),
-        COMPUTE_BUDGET => todo!(),
+        SPL_TOKEN => token::spl::decode(index, data, accounts, account_keys),
+        TOKEN_2022 => token::token2022::decode(index, data, accounts, account_keys),
+        COMPUTE_BUDGET => compute::decode(index, data, accounts, account_keys),
         _ => unknown_program(index, program_id, data),
     }
 }
