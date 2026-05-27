@@ -9,7 +9,7 @@ pub enum ObsrvError {
     #[error("input too large (max 10000 chars)")]
     InputTooLarge,
 
-    #[error("transaction too large (max 4096 bytes)")]
+    #[error("transaction too large (max 1232 bytes)")]
     TransactionTooLarge,
 
     // transaction errors
@@ -28,6 +28,9 @@ pub enum ObsrvError {
 
     #[error("base58 decode failed: {0}")]
     Base58DecodeFailed(String),
+
+    #[error("decode failed: input is neither valid base64 nor base58")]
+    DecodeFailed,
 
     #[error("deserialization failed: {0}")]
     DeserializationFailed(String),

@@ -28,7 +28,9 @@ pub enum InstructionType {
     // token program
     TokenTransfer,
     TokenTransferChecked,
-
+    TokenCloseAccount,
+    TokenSetAuthority,
+    TokenApprove,
     // compute budget
     SetComputeUnitLimit,
     SetComputeUnitPrice,
@@ -40,8 +42,9 @@ pub enum InstructionType {
 pub enum ProgramType {
     System,
     SplToken,
+    Token2022,
     ComputeBudget,
-    Unknown,
+    Unknown(String),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
