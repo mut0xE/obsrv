@@ -18,6 +18,7 @@ impl Config {
         }
     }
 
+    #[allow(dead_code)]
     pub fn rpc_url(&self) -> String {
         format!("{}/?api-key={}", self.helius_rpc_url, self.helius_api_key)
     }

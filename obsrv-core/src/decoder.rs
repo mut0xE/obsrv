@@ -91,9 +91,7 @@ pub fn decode_payload(input: &str) -> Result<DecodedPayload, ObsrvError> {
     validate_byte_size(&bytes)?;
 
     // Step 5: Deserialize bytes into VersionedTransaction, Transaction, or Message
-    let payload = deserialize_payload(&bytes);
-    println!("deserialize payload:{:#?}", &payload);
-    payload
+    deserialize_payload(&bytes)
 }
 
 /// Takes a DecodedPayload and decodes each instruction through the program router.

@@ -5,6 +5,7 @@ use helius::{Helius, types::Cluster};
 use crate::config::Config;
 
 #[derive(Clone)]
+#[allow(dead_code)]
 pub struct AppState {
     pub helius: Arc<Helius>,
     pub config: Arc<Config>,

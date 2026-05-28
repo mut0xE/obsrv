@@ -2,27 +2,32 @@ use axum::{Json, extract::State};
 use obsrv_core::{
     analyzer,
     decoder::decode_payload,
-    types::{AnalyzeResponse, AnalyzeTxRequest},
+    types::{AnalyzeTxRequest, ApiResponse, TxResponse},
 };
 
-use crate::{errors::ApiError, state::AppState};
+use crate::{
+    errors::ApiError,
+    response::{build_analysis, build_expected_balances, build_instructions, build_meta},
+    state::AppState,
+};
 
 pub async fn handle(
     State(_state): State<AppState>,
     Json(req): Json<AnalyzeTxRequest>,
-) -> Result<Json<AnalyzeResponse>, ApiError> {
+) -> Result<Json<ApiResponse>, ApiError> {
     tracing::info!(input_len = req.raw_tx.len(), "POST /analyze");
 
-    // step 1: decode raw bytes
     let payload = decode_payload(&req.raw_tx).map_err(ApiError::from)?;
-    // step 2: run full analysis pipeline
     let report = analyzer::analyze(&payload).map_err(ApiError::from)?;
 
-    tracing::info!(
-        risk_score    = report.risk_score,
-        recommendation = %report.recommendation,
-        is_durable_nonce = report.is_durable_nonce,
-        "analysis complete"
-    );
-    Ok(Json(AnalyzeResponse { report }))
+    Ok(Json(ApiResponse {
+        tx: TxResponse {
+            meta: build_meta(&report),
+            analysis: build_analysis(&report),
+            instructions: build_instructions(&report),
+            balances: build_expected_balances(&report),
+            simulation: None,
+            forensics: None,
+        },
+    }))
 }
