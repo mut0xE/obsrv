@@ -56,19 +56,20 @@ pub async fn get_watched_wallets(pool: &PgPool) -> Result<Vec<WatchedWallet>, sq
     .await
 }
 
-pub async fn deactivate_watched_wallet(pool: &PgPool, wallet: &str) -> Result<(), sqlx::Error> {
-    sqlx::query!(
+pub async fn deactivate_watched_wallet(pool: &PgPool, wallet: &str) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query!(
         r#"
         UPDATE watched_wallets
         SET active = FALSE
         WHERE wallet = $1
+        AND active = TRUE
         "#,
         wallet
     )
     .execute(pool)
     .await?;
 
-    Ok(())
+    Ok(result.rows_affected() > 0)
 }
 
 // WATCHED PROGRAMS
@@ -504,4 +505,53 @@ pub async fn update_stream_checkpoint(pool: &PgPool, last_slot: i64) -> Result<(
     .await?;
 
     Ok(())
+}
+
+pub async fn deactivate_watched_program(
+    pool: &PgPool,
+    program_id: &str,
+) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query!(
+        r#"
+        UPDATE watched_programs
+        SET active = FALSE
+        WHERE program_id = $1
+        AND active = TRUE
+        "#,
+        program_id
+    )
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected() > 0)
+}
+
+pub async fn get_watched_program(pool: &PgPool, program_id: &str) -> Option<WatchedProgram> {
+    sqlx::query_as!(
+        WatchedProgram,
+        r#"
+        SELECT program_id, name, active, created_at
+        FROM watched_programs
+        WHERE program_id = $1
+        "#,
+        program_id
+    )
+    .fetch_optional(pool)
+    .await
+    .ok()
+    .flatten()
+}
+pub async fn get_watched_wallet(pool: &PgPool, wallet: &str) -> Option<WatchedWallet> {
+    sqlx::query_as!(
+        WatchedWallet,
+        r#"
+        SELECT wallet, telegram_chat_id, alert_threshold, active, created_at
+        FROM watched_wallets
+        WHERE wallet = $1
+        "#,
+        wallet
+    )
+    .fetch_optional(pool)
+    .await
+    .ok()
+    .flatten()
 }

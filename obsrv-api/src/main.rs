@@ -59,6 +59,18 @@ async fn main() {
         .route("/forensics", post(handlers::forensics::handle))
         .route("/simulate", post(handlers::simulate::handle))
         .route("/nonce/inspect", post(handlers::nonce_inspect::handle))
+        .route("/monitor/wallet", post(handlers::monitor::add_wallet))
+        .route(
+            "/monitor/wallet/remove",
+            post(handlers::monitor::remove_wallet),
+        )
+        .route("/monitor/program", post(handlers::monitor::add_program))
+        .route(
+            "/monitor/program/remove",
+            post(handlers::monitor::remove_program),
+        )
+        .route("/monitor/list", get(handlers::monitor::list))
+        .route("/ws", get(handlers::ws::handle))
         .with_state(state)
         .layer(cors);
 
