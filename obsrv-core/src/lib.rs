@@ -1,3 +1,4 @@
+pub mod account_decoder;
 pub mod analyzer;
 pub mod decoder;
 pub mod errors;

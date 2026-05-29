@@ -5,6 +5,7 @@ use crate::{
 };
 use axum::{Json, extract::State};
 use obsrv_core::{
+    account_decoder::DecodedAccountState,
     analyzer::analyze,
     decoder::decode_payload,
     types::{
@@ -43,16 +44,65 @@ pub async fn handle(
         .filter_map(|k| Pubkey::from_str(k).ok())
         .collect();
 
-    let fallback_pre_sol = rpc
+    let fetched_accounts = rpc
         .get_multiple_accounts(&pubkeys)
-        .map(|accounts| {
-            accounts
-                .iter()
-                .map(|opt| opt.as_ref().map(|a| a.lamports).unwrap_or(0))
-                .collect::<Vec<u64>>()
-        })
-        .unwrap_or_else(|_| vec![0; report.account_keys.len()]);
+        .unwrap_or_else(|_| vec![None; pubkeys.len()]);
 
+    let fallback_pre_sol = fetched_accounts
+        .iter()
+        .map(|opt| opt.as_ref().map(|a| a.lamports).unwrap_or(0))
+        .collect::<Vec<u64>>();
+
+    let decoded_accounts = fetched_accounts
+        .iter()
+        .enumerate()
+        .filter_map(|(i, opt)| {
+            let account = opt.as_ref()?;
+            let pubkey = pubkeys.get(i)?;
+
+            match obsrv_core::account_decoder::decode_account_state(
+                pubkey,
+                &account.owner,
+                &account.data,
+            ) {
+                Some(decoded) => {
+                    println!("{:#?}", decoded);
+                    Some(decoded)
+                }
+
+                None => Some(DecodedAccountState {
+                    address: pubkey.to_string(),
+                    owner: account.owner.to_string(),
+
+                    // fallback label
+                    program: match account.owner.to_string().as_str() {
+                        "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb" => "token-2022",
+                        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" => "spl-token",
+                        "11111111111111111111111111111111" => "system",
+                        _ => "unknown",
+                    }
+                    .to_string(),
+
+                    parsed: serde_json::json!({
+                        "note": "account parser unavailable",
+                        "data_len": account.data.len(),
+                    }),
+
+                    space: account.data.len() as u64,
+                }),
+            }
+        })
+        .collect::<Vec<_>>();
+
+    for account in &decoded_accounts {
+        tracing::debug!(
+            address = %account.address,
+            owner = %account.owner,
+            program = %account.program,
+            space = account.space,
+            "decoded simulation account"
+        );
+    }
     let config = RpcSimulateTransactionConfig {
         sig_verify: false,
         replace_recent_blockhash: true,
@@ -160,6 +210,7 @@ pub async fn handle(
         },
         logs,
         replacement_blockhash,
+        accounts: decoded_accounts,
     };
 
     Ok(Json(ApiResponse {
