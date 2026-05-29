@@ -293,8 +293,13 @@ pub struct MonitorResponse {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NonceInspectResponse {
     pub nonce_account: String,
+    pub version: String,
+    pub state: String,
     pub authority: String,
     pub nonce_value: String,
-    pub created_slot: Option<u64>,
+    pub lamports: u64,
+    pub sol: f64,
+    pub lamports_per_sig: u64,
     pub risk_flags: Vec<String>,
+    pub risk_level: String,
 }

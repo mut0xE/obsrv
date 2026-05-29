@@ -7,13 +7,14 @@ use tracing_subscriber::EnvFilter;
 
 use crate::{
     config::Config,
-    handlers::{analyze, forensics, health},
+    handlers::{analyze, forensics, health, nonce_inspect, simulate},
     state::AppState,
 };
 
 mod config;
 mod errors;
 mod handlers;
+pub mod response;
 mod state;
 #[tokio::main]
 async fn main() {
@@ -25,6 +26,7 @@ async fn main() {
         .init();
 
     let config = Config::from_env();
+    let addr = format!("0.0.0.0:{}", config.port);
     let state = AppState::new(config);
 
     let cors = CorsLayer::new()
@@ -36,11 +38,12 @@ async fn main() {
         .route("/health", get(health::handle))
         .route("/analyze", post(analyze::handle))
         .route("/forensics", post(forensics::handle))
+        .route("/simulate", post(simulate::handle))
+        .route("/nonce/inspect", post(nonce_inspect::handle))
         .with_state(state)
         .layer(cors);
 
-    let addr = "0.0.0.0:3001";
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
 
     tracing::info!("obsrv-api listening on {}", addr);
     axum::serve(listener, app).await.unwrap();
