@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO instruction_analytics\n                (program_id, instruction_type,\n                 call_count, failed_count, total_cu, avg_cu,\n                 peak_cu, unique_callers, first_called, last_called,\n                 risk_distribution)\n            VALUES ($1, $2, 1, $3, $4, $5, $4, 1, $6, $6,\n                    jsonb_build_object($7::text, 1))\n            ON CONFLICT(program_id, instruction_type) DO UPDATE SET\n                call_count   = instruction_analytics.call_count + 1,\n                failed_count = instruction_analytics.failed_count + $3,\n                total_cu     = instruction_analytics.total_cu + $4,\n                avg_cu       = (instruction_analytics.total_cu + $4)::real\n                               / (instruction_analytics.call_count + 1),\n                peak_cu      = GREATEST(instruction_analytics.peak_cu, $4),\n                last_called  = $6,\n                risk_distribution = jsonb_set(\n                    COALESCE(instruction_analytics.risk_distribution, '{}'::jsonb),\n                    ARRAY[$7::text],\n                    to_jsonb(COALESCE((instruction_analytics.risk_distribution->>$7)::bigint, 0) + 1)\n                )\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int4",
+        "Int4",
+        "Float4",
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e96ffefcc2abae6d0f7a81e292eb2c3a6ed0bec6d94cb4c73699642f613e42ca"
+}

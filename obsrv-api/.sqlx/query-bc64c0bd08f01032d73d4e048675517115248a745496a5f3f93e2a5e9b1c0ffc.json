@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT wallet, program_id, call_count, failed_count,\n               total_cu, avg_cu, last_called\n        FROM wallet_program_stats\n        WHERE wallet = $1\n        ORDER BY call_count DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "wallet",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "program_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "call_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "failed_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "total_cu",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "avg_cu",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 6,
+        "name": "last_called",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "bc64c0bd08f01032d73d4e048675517115248a745496a5f3f93e2a5e9b1c0ffc"
+}

@@ -1,7 +1,7 @@
 -- wallets being monitored
 CREATE TABLE IF NOT EXISTS watched_wallets (
     wallet           TEXT PRIMARY KEY,
-    telegram_chat_id TEXT NOT NULL,
+    telegram_chat_id TEXT,  -- optional: will be used when Telegram bot feature is enabled
     alert_threshold  INTEGER NOT NULL DEFAULT 7,
     active           BOOLEAN NOT NULL DEFAULT TRUE,
     created_at       BIGINT NOT NULL

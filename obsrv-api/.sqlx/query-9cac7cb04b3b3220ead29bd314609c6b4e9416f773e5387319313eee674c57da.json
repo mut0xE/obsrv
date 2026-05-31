@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT wallet, total_txs, failed_txs, total_cu, avg_cu,\n               total_fees, high_risk_txs, last_updated\n        FROM wallet_analytics\n        WHERE wallet = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "wallet",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "total_txs",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "failed_txs",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "total_cu",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "avg_cu",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 5,
+        "name": "total_fees",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "high_risk_txs",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "last_updated",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "9cac7cb04b3b3220ead29bd314609c6b4e9416f773e5387319313eee674c57da"
+}

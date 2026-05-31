@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM helius_webhooks WHERE webhook_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d6c2e3016ab3ef693a4e8ea6662f58a6c7952a62b0692c928c0e85e8b430cc6c"
+}

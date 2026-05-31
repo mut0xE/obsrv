@@ -1,7 +1,7 @@
 use obsrv_core::types::*;
 use solana_sdk::native_token::LAMPORTS_PER_SOL;
 
-fn severity_str(s: &Severity) -> String {
+pub fn severity_str(s: &Severity) -> String {
     match s {
         Severity::None => "none",
         Severity::Info => "info",
@@ -11,7 +11,7 @@ fn severity_str(s: &Severity) -> String {
     .to_string()
 }
 
-fn program_str(p: &ProgramType) -> String {
+pub fn program_str(p: &ProgramType) -> String {
     match p {
         ProgramType::System => "System".to_string(),
         ProgramType::SplToken => "SPL Token".to_string(),
@@ -21,7 +21,17 @@ fn program_str(p: &ProgramType) -> String {
     }
 }
 
-fn ix_type_str(t: &InstructionType) -> String {
+pub fn program_id_str(p: &ProgramType) -> String {
+    match p {
+        ProgramType::System => "11111111111111111111111111111111".to_string(),
+        ProgramType::SplToken => "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA".to_string(),
+        ProgramType::Token2022 => "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb".to_string(),
+        ProgramType::ComputeBudget => "ComputeBudget111111111111111111111111111111".to_string(),
+        ProgramType::Unknown(s) => s.clone(),
+    }
+}
+
+pub fn ix_type_str(t: &InstructionType) -> String {
     match t {
         InstructionType::NonceAdvance => "nonce_advance",
         InstructionType::NonceInitialize => "nonce_initialize",
@@ -41,7 +51,7 @@ fn ix_type_str(t: &InstructionType) -> String {
     .to_string()
 }
 
-fn risk_level_str(s: &Severity) -> String {
+pub fn risk_level_str(s: &Severity) -> String {
     match s {
         Severity::None => "low",
         Severity::Info => "medium",
@@ -51,7 +61,7 @@ fn risk_level_str(s: &Severity) -> String {
     .to_string()
 }
 
-fn lamports_to_sol(lamports: u64) -> f64 {
+pub fn lamports_to_sol(lamports: u64) -> f64 {
     lamports as f64 / LAMPORTS_PER_SOL as f64
 }
 
@@ -346,7 +356,7 @@ pub fn extract_cu_budget(report: &TransactionReport) -> Option<u64> {
         .and_then(|s| s.parse::<u64>().ok())
 }
 
-fn raw_to_ui_string(raw: &str, decimals: u8) -> String {
+pub fn raw_to_ui_string(raw: &str, decimals: u8) -> String {
     let value = raw.parse::<i128>().unwrap_or(0);
     unsigned_ui_string(value, decimals)
 }

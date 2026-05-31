@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO forensics_history\n            (signature, slot, wallet, risk_score, execution_status,\n             failure_reason, cu_consumed, fee_lamports, is_durable_nonce,\n             programs_called, block_time, created_at)\n        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)\n        ON CONFLICT(signature) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Text",
+        "Int4",
+        "Text",
+        "Text",
+        "Int8",
+        "Int8",
+        "Bool",
+        "Jsonb",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "23c4f47379e205308b17818d58684b14abfe2dcde1c061f6df61faa70b22a6ff"
+}

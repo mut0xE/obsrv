@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::account_decoder::DecodedAccountState;
+
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum Severity {
@@ -237,6 +239,8 @@ pub struct TxSimulation {
     pub replacement_blockhash: Option<ReplacementBlockhash>,
 
     pub logs: Vec<String>,
+
+    pub accounts: Vec<DecodedAccountState>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -272,22 +276,8 @@ pub struct TxForensics {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct MonitorWalletRequest {
-    pub wallet: String,
-    pub telegram_chat_id: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 pub struct NonceInspectRequest {
     pub nonce_account: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct MonitorResponse {
-    pub watching: bool,
-    pub wallet: String,
-    pub webhook_id: String,
-    pub message: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -302,4 +292,106 @@ pub struct NonceInspectResponse {
     pub lamports_per_sig: u64,
     pub risk_flags: Vec<String>,
     pub risk_level: String,
+}
+
+// ============================================================
+// STREAM TYPES — used by the Yellowstone gRPC monitoring pipeline
+// ============================================================
+
+/// Core output of the stream processor for each transaction.
+/// Stored in DB + broadcast to WebSocket clients.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct StreamTxEvent {
+    pub signature: String,
+    pub slot: u64,
+    pub block_time: Option<i64>,
+
+    pub fee_payer: String,
+
+    pub status: TxStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failure_reason: Option<String>,
+    pub fee_lamports: u64,
+    pub cu_consumed: Option<u64>,
+
+    /// Which watched wallets appeared in this tx's account keys.
+    pub matched_wallets: Vec<String>,
+    /// Which watched programs appeared in this tx's account keys.
+    pub matched_programs: Vec<String>,
+
+    pub risk_score: u8,
+    pub risk_level: String,
+    pub summary: String,
+    pub flags: Vec<String>,
+
+    pub sol_changes: Vec<StreamSolChange>,
+    pub token_changes: Vec<StreamTokenChange>,
+    pub programs_called: Vec<String>,
+    pub logs: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum TxStatus {
+    Success,
+    Failed,
+}
+
+/// SOL balance change for a single account.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct StreamSolChange {
+    pub address: String,
+    pub change_lamports: i64,
+    pub pre_lamports: u64,
+    pub post_lamports: u64,
+    pub change_sol: f64,
+    pub pre_sol: f64,
+    pub post_sol: f64,
+}
+
+/// Token balance change for a single token account.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct StreamTokenChange {
+    pub address: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub owner: Option<String>,
+    pub mint: String,
+    pub pre_raw: String,
+    pub post_raw: String,
+    pub change_raw: String,
+    pub pre_ui: String,
+    pub post_ui: String,
+    pub change_ui: String,
+    pub decimals: u8,
+}
+
+/// Alert sent when a watched wallet's tx exceeds the risk threshold.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WalletAlert {
+    pub wallet: String,
+    pub telegram_chat_id: String,
+    pub signature: String,
+    pub slot: u64,
+    pub risk_score: u8,
+    pub risk_level: String,
+    pub summary: String,
+    pub flags: Vec<String>,
+    pub fee_lamports: u64,
+    pub cu_consumed: Option<u64>,
+    pub sol_changes: Vec<StreamSolChange>,
+    pub token_changes: Vec<StreamTokenChange>,
+}
+
+/// Alert sent when a watched program is called.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ProgramAlert {
+    pub program_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub program_name: Option<String>,
+    pub signature: String,
+    pub slot: u64,
+    pub caller: String,
+    pub risk_score: u8,
+    pub summary: String,
+    pub cu_consumed: Option<u64>,
 }

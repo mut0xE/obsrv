@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE stream_checkpoint\n        SET last_slot  = $1,\n            updated_at = $2\n        WHERE id = 1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4e31f7a88214ea219f1767a56aeea6e8f9472f3dc5bb623d071495b273caff40"
+}

@@ -1,131 +1,158 @@
 use crate::{errors::ApiError, state::AppState};
-use axum::{Json, extract::State};
-use obsrv_core::types::{NonceInspectRequest, NonceInspectResponse};
-use solana_sdk::{native_token::LAMPORTS_PER_SOL, pubkey::Pubkey};
-use std::str::FromStr;
 
-/*
-[0..4]  = Versions discriminant  u32 le  0=Legacy 1=Current
-[4..8]  = State discriminant     u32 le  0=Uninitialized 1=Initialized
-[8..40] = authority              Pubkey  32 raw bytes
-[40..72]= nonce value            Hash    32 raw bytes
-[72..80]= lamports_per_sig       u64 le  = 5000
-*/
+use axum::{Json, extract::State};
+
+use obsrv_core::types::{NonceInspectRequest, NonceInspectResponse};
+
+use solana_sdk::{native_token::LAMPORTS_PER_SOL, pubkey::Pubkey};
+
+use std::str::FromStr;
 
 pub async fn handle(
     State(state): State<AppState>,
     Json(req): Json<NonceInspectRequest>,
 ) -> Result<Json<NonceInspectResponse>, ApiError> {
-    tracing::info!(nonce_account = %req.nonce_account, "POST /nonce/inspect");
+    tracing::info!(
+        nonce_account = %req.nonce_account,
+        "POST /nonce/inspect"
+    );
 
-    // parse pubkey
+    // 1. PARSE PUBKEY
+
     let pubkey = Pubkey::from_str(&req.nonce_account)
         .map_err(|e| ApiError::BadRequest(format!("invalid pubkey: {}", e)))?;
 
-    // fetch account from chain
+    // 2. FETCH ACCOUNT FROM RPC
     let account = state
-        .helius
-        .connection()
+        .rpc
         .get_account(&pubkey)
         .map_err(|e| ApiError::InternalError(format!("RPC error: {}", e)))?;
 
-    let lamports = account.lamports;
-    let sol = lamports as f64 / LAMPORTS_PER_SOL as f64;
-    let data = &account.data;
+    // 3. PARSE ACCOUNT USING solana-account-decoder
+    let parsed_account =
+        obsrv_core::account_decoder::decode_account_state(&pubkey, &account.owner, &account.data)
+            .ok_or_else(|| ApiError::BadRequest("account could not be parsed".to_string()))?;
 
-    tracing::debug!("nonce account data: {} bytes {:?}", data.len(), data);
+    tracing::debug!(
+        ?parsed_account,
+        "parsed nonce account via solana-account-decoder"
+    );
 
-    // validate nonce account size
-    if data.len() != 80 {
+    // 4. ENSURE THIS IS A NONCE ACCOUNT
+    if parsed_account.program != "nonce" {
         return Err(ApiError::BadRequest(format!(
-            "account data is {} bytes, expected 80 — not a nonce account",
-            data.len()
+            "account is a {} account, expected nonce account",
+            parsed_account.program
         )));
     }
 
-    // bytes [0..4] = Versions discriminant
-    let versions_bytes: [u8; 4] = data[0..4]
-        .try_into()
-        .map_err(|_| ApiError::InternalError("failed to read versions bytes".to_string()))?;
-    let versions_val = u32::from_le_bytes(versions_bytes);
-    let versions_str = match versions_val {
+    // 5. EXTRACT PARSED JSON OBJECT
+    let parsed = parsed_account
+        .parsed
+        .as_object()
+        .ok_or_else(|| ApiError::InternalError("invalid parsed nonce account".to_string()))?;
+
+    // 6. READ NONCE STATE
+    let nonce_state = parsed
+        .get("type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+
+    // 7. READ INFO OBJECT
+    let info = parsed
+        .get("info")
+        .and_then(|v| v.as_object())
+        .ok_or_else(|| ApiError::InternalError("parsed nonce account missing info".to_string()))?;
+
+    // 8. EXTRACT AUTHORITY
+    let authority = info
+        .get("authority")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+
+    // 9. EXTRACT DURABLE NONCE VALUE
+    let nonce_value = info
+        .get("blockhash")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+
+    // 10. EXTRACT FEE CALCULATOR
+    let lamports_per_sig = info
+        .get("feeCalculator")
+        .and_then(|v| v.get("lamportsPerSignature"))
+        .and_then(|v| v.as_str())
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(0);
+
+    // 11. ACCOUNT BALANCE
+    let lamports = account.lamports;
+
+    let sol = lamports as f64 / LAMPORTS_PER_SOL as f64;
+
+    // 12. VERSION
+    let version = match u32::from_le_bytes(account.data[0..4].try_into().unwrap()) {
         0 => "legacy",
         1 => "current",
         _ => "unknown",
     };
 
-    // bytes [4..8] = State discriminant
-    let state_bytes: [u8; 4] = data[4..8]
-        .try_into()
-        .map_err(|_| ApiError::InternalError("failed to read state bytes".to_string()))?;
-    let state_val = u32::from_le_bytes(state_bytes);
-    let nonce_state = match state_val {
-        0 => "uninitialized",
-        1 => "initialized",
-        _ => "unknown",
-    };
-
-    // bytes [8..40] = authority pubkey
-    let authority_bytes: [u8; 32] = data[8..40]
-        .try_into()
-        .map_err(|_| ApiError::InternalError("failed to read authority bytes".to_string()))?;
-    let authority = Pubkey::from(authority_bytes);
-
-    // bytes [40..72] = nonce value (blockhash)
-    let nonce_bytes: [u8; 32] = data[40..72]
-        .try_into()
-        .map_err(|_| ApiError::InternalError("failed to read nonce value bytes".to_string()))?;
-    let nonce_value = solana_sdk::hash::Hash::new_from_array(nonce_bytes).to_string();
-
-    // bytes [72..80] = lamports per signature
-    let fee_bytes: [u8; 8] = data[72..80]
-        .try_into()
-        .map_err(|_| ApiError::InternalError("failed to read fee calculator bytes".to_string()))?;
-    let lamports_per_sig = u64::from_le_bytes(fee_bytes);
-
-    // build risk flags
+    // 13. BUILD RISK FLAGS
     let mut risk_flags = vec![];
 
-    if nonce_state == "initialized" {
-        risk_flags.push(format!(
-            "nonce account is ACTIVE — authority: {}",
-            authority.to_string()
-        ));
-        risk_flags
-            .push("any transaction using this nonce as blockhash will never expire".to_string());
-        risk_flags.push(format!("fee: {} lamports per signature", lamports_per_sig));
+    match nonce_state {
+        "initialized" => {
+            risk_flags.push(format!(
+                "ACTIVE durable nonce account controlled by {}",
+                authority
+            ));
+
+            risk_flags
+                .push("transactions using this nonce may remain valid indefinitely".to_string());
+
+            risk_flags
+                .push("durable nonce transactions bypass normal blockhash expiry".to_string());
+
+            risk_flags.push(format!(
+                "{} lamports charged per signature",
+                lamports_per_sig
+            ));
+        }
+
+        "uninitialized" => {
+            risk_flags.push("nonce account exists but is not initialized".to_string());
+
+            risk_flags.push("cannot yet be used for durable nonce transactions".to_string());
+        }
+
+        _ => {
+            risk_flags.push("unknown nonce account state detected".to_string());
+        }
     }
 
-    if nonce_state == "uninitialized" {
-        risk_flags.push("nonce account is not yet initialized".to_string());
-        risk_flags.push("cannot be used for durable nonce transactions yet".to_string());
-    }
-
-    if versions_str == "legacy" {
-        risk_flags.push("legacy nonce account format — consider upgrading".to_string());
-    }
-
-    let risk_level = if nonce_state == "initialized" {
-        "warning"
-    } else {
-        "info"
+    // 14. RISK LEVEL
+    let risk_level = match nonce_state {
+        "initialized" => "warning",
+        "uninitialized" => "info",
+        _ => "warning",
     };
 
+    // 15. LOG RESULT
     tracing::info!(
         nonce_account    = %req.nonce_account,
-        versions         = %versions_str,
-        state            = %nonce_state,
+        nonce_state      = %nonce_state,
         authority        = %authority,
+        nonce_value      = %nonce_value,
         lamports_per_sig = lamports_per_sig,
         "nonce inspect complete"
     );
 
+    // 16. RESPONSE
     Ok(Json(NonceInspectResponse {
         nonce_account: req.nonce_account,
-        version: versions_str.to_string(),
+        version: version.to_string(),
         state: nonce_state.to_string(),
         authority: authority.to_string(),
-        nonce_value,
+        nonce_value: nonce_value.to_string(),
         lamports,
         sol,
         lamports_per_sig,

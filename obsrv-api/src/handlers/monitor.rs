@@ -7,7 +7,7 @@ use crate::{db::queries, errors::ApiError, state::AppState};
 #[derive(Debug, Deserialize)]
 pub struct AddWalletRequest {
     pub wallet: String,
-    pub telegram_chat_id: String,
+    pub telegram_chat_id: Option<String>, // optional: Telegram alerts coming soon
     pub alert_threshold: Option<i32>, // default 7
 }
 
@@ -44,7 +44,7 @@ pub struct MonitorListResponse {
 #[derive(Debug, Serialize)]
 pub struct WalletEntry {
     pub wallet: String,
-    pub telegram_chat_id: String,
+    pub telegram_chat_id: Option<String>,
     pub alert_threshold: i32,
     pub created_at: i64,
     pub active: bool,
@@ -68,8 +68,10 @@ pub async fn add_wallet(
     // validate wallet address
     validate_pubkey(&req.wallet)?;
 
-    // validate telegram chat id
-    validate_telegram_chat_id(&req.telegram_chat_id)?;
+    // validate telegram chat id (commented out - feature coming soon)
+    // if let Some(ref chat_id) = req.telegram_chat_id {
+    //     validate_telegram_chat_id(chat_id)?;
+    // }
 
     let threshold = req.alert_threshold.unwrap_or(7).clamp(1, 10);
 
@@ -114,9 +116,6 @@ pub async fn add_wallet(
     queries::insert_watched_wallet(&state.db, &req.wallet, &req.telegram_chat_id, threshold)
         .await
         .map_err(|e| ApiError::InternalError(format!("DB error: {}", e)))?;
-
-    // signal stream to reload
-    let _ = state.reload_tx.send(()).await;
 
     tracing::info!(
         wallet    = %req.wallet,
@@ -166,8 +165,6 @@ pub async fn remove_wallet(
     queries::deactivate_watched_wallet(&state.db, &req.wallet)
         .await
         .map_err(|e| ApiError::InternalError(format!("DB error: {}", e)))?;
-
-    let _ = state.reload_tx.send(()).await;
 
     tracing::info!(wallet = %req.wallet, "wallet removed from monitor");
 
@@ -234,8 +231,6 @@ pub async fn add_program(
         .await
         .map_err(|e| ApiError::InternalError(format!("DB error: {}", e)))?;
 
-    let _ = state.reload_tx.send(()).await;
-
     let name = req.name.as_deref().unwrap_or("unknown");
 
     tracing::info!(
@@ -288,8 +283,6 @@ pub async fn remove_program(
     queries::deactivate_watched_program(&state.db, &req.program_id)
         .await
         .map_err(|e| ApiError::InternalError(format!("DB error: {}", e)))?;
-
-    let _ = state.reload_tx.send(()).await;
 
     tracing::info!(
         program_id = %req.program_id,

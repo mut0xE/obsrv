@@ -3,7 +3,7 @@ use axum::{
     routing::{get, post},
 };
 use sqlx::postgres::PgPoolOptions;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::broadcast;
 use tower_http::cors::{Any, CorsLayer};
 
 mod config;
@@ -12,8 +12,9 @@ mod errors;
 mod handlers;
 mod response;
 mod state;
+mod streams;
+mod telegram_bot;
 mod ws;
-
 use state::AppState;
 use ws::WsEvent;
 
@@ -43,10 +44,21 @@ async fn main() {
     // WebSocket broadcast channel
     let (ws_tx, _) = broadcast::channel::<WsEvent>(256);
 
-    // stream reload signal channel
-    let (reload_tx, _reload_rx) = mpsc::channel::<()>(10);
+    let state = AppState::new(config, pool, ws_tx);
 
-    let state = AppState::new(config, pool, ws_tx, reload_tx);
+    // spawn Yellowstone gRPC stream as a background task
+    tokio::spawn(streams::run_stream(
+        state.config.clone(),
+        state.db.clone(),
+        state.ws_tx.clone(),
+    ));
+
+    // spawn Telegram bot if token is configured
+    if let Some(ref token) = state.config.telegram_bot_token {
+        let token = token.clone();
+        let pool = state.db.clone();
+        tokio::spawn(telegram_bot::run_bot(token, pool));
+    }
 
     let cors = CorsLayer::new()
         .allow_origin(Any)
@@ -70,12 +82,30 @@ async fn main() {
             post(handlers::monitor::remove_program),
         )
         .route("/monitor/list", get(handlers::monitor::list))
+        .route("/analytics/wallet", get(handlers::analytics::wallet))
+        .route("/analytics/program", get(handlers::analytics::program))
+        .route(
+            "/analytics/programs",
+            get(handlers::analytics::top_programs),
+        )
+        .route("/analytics/alerts", get(handlers::analytics::alerts))
         .route("/ws", get(handlers::ws::handle))
-        .with_state(state)
+        // stream query API
+        .route(
+            "/stream/transactions",
+            get(handlers::stream::get_transactions),
+        )
+        .route("/stream/tx", get(handlers::stream::get_transaction))
+        .route("/stream/stats", get(handlers::stream::get_stats))
+        .route(
+            "/stream/wallet/history",
+            get(handlers::stream::get_wallet_history),
+        )
+        .with_state(state.clone())
         .layer(cors);
 
-    let addr = "0.0.0.0:3001";
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    let addr = format!("0.0.0.0:{}", state.config.port);
+    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
 
     tracing::info!("obsrv-api listening on {}", addr);
     axum::serve(listener, app).await.unwrap();

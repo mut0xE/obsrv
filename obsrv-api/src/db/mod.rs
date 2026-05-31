@@ -2,7 +2,10 @@ use sqlx::{PgPool, postgres::PgPoolOptions};
 
 use crate::errors::ApiError;
 
+#[allow(dead_code)]
 pub mod queries;
+
+#[allow(dead_code)]
 pub async fn connect(database_url: &str) -> Result<PgPool, ApiError> {
     PgPoolOptions::new()
         .max_connections(20)
@@ -11,6 +14,7 @@ pub async fn connect(database_url: &str) -> Result<PgPool, ApiError> {
         .map_err(|e| ApiError::InternalError(format!("DB connect failed: {}", e)))
 }
 
+#[allow(dead_code)]
 pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
     sqlx::migrate!("./migrations")
         .run(pool)

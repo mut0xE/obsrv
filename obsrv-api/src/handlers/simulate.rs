@@ -36,7 +36,7 @@ pub async fn handle(
         )
     })?;
 
-    let rpc = state.helius.connection();
+    let rpc = &*state.rpc;
 
     let pubkeys: Vec<Pubkey> = report
         .account_keys

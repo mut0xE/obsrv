@@ -6,7 +6,7 @@ use sqlx::PgPool;
 #[derive(Debug, sqlx::FromRow)]
 pub struct WatchedWallet {
     pub wallet: String,
-    pub telegram_chat_id: String,
+    pub telegram_chat_id: Option<String>,
     pub alert_threshold: i32,
     pub active: bool,
     pub created_at: i64,
@@ -15,7 +15,7 @@ pub struct WatchedWallet {
 pub async fn insert_watched_wallet(
     pool: &PgPool,
     wallet: &str,
-    telegram_chat_id: &str,
+    telegram_chat_id: &Option<String>,
     alert_threshold: i32,
 ) -> Result<(), sqlx::Error> {
     let now = Utc::now().timestamp();
@@ -33,7 +33,7 @@ pub async fn insert_watched_wallet(
             active            = TRUE
         "#,
         wallet,
-        telegram_chat_id,
+        telegram_chat_id.as_deref(),
         alert_threshold,
         now,
     )
@@ -163,7 +163,7 @@ pub async fn insert_forensics_history(
              failure_reason, cu_consumed, fee_lamports, is_durable_nonce,
              programs_called, block_time, created_at)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-        ON CONFLICT(signature) DO NOTHING
+        ON CONFLICT(signature, wallet) DO NOTHING
         "#,
         signature,
         slot,
@@ -540,6 +540,16 @@ pub async fn get_watched_program(pool: &PgPool, program_id: &str) -> Option<Watc
     .ok()
     .flatten()
 }
+pub async fn is_program_watched(pool: &PgPool, program_id: &str) -> bool {
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS(SELECT 1 FROM watched_programs WHERE program_id = $1 AND active = TRUE) as "exists!""#,
+        program_id
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap_or(false)
+}
+
 pub async fn get_watched_wallet(pool: &PgPool, wallet: &str) -> Option<WatchedWallet> {
     sqlx::query_as!(
         WatchedWallet,
