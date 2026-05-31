@@ -1,0 +1,95 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, signature, slot, wallet, risk_score, execution_status,\n                   failure_reason, cu_consumed, fee_lamports, is_durable_nonce,\n                   programs_called, block_time, created_at\n            FROM forensics_history\n            ORDER BY created_at DESC\n            LIMIT $1 OFFSET $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "signature",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "slot",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "wallet",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "risk_score",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "execution_status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "failure_reason",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "cu_consumed",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "fee_lamports",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "is_durable_nonce",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "programs_called",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 11,
+        "name": "block_time",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 12,
+        "name": "created_at",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "2f36c5e4017475fb7fa5cd285e4c52220679b01238a624a33fb6b09ede474ac0"
+}

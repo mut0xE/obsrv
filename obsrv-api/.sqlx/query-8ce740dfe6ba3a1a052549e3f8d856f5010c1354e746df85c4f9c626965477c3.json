@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO wallet_program_stats\n                    (wallet, program_id, call_count, failed_count,\n                     total_cu, avg_cu, last_called)\n                VALUES ($1, $2, 1, $3, $4, $5, $6)\n                ON CONFLICT(wallet, program_id) DO UPDATE SET\n                    call_count   = wallet_program_stats.call_count + 1,\n                    failed_count = wallet_program_stats.failed_count + $3,\n                    total_cu     = wallet_program_stats.total_cu + $4,\n                    avg_cu       = (wallet_program_stats.total_cu + $4)::float8\n                                   / (wallet_program_stats.call_count + 1),\n                    last_called  = $6\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8",
+        "Int8",
+        "Float8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8ce740dfe6ba3a1a052549e3f8d856f5010c1354e746df85c4f9c626965477c3"
+}

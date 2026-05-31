@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AlertContainer } from "@/components/ErrorAlert";
+import { ObsrvBoot } from "@/components/ObsrvBoot";
+import { AppChrome } from "@/components/AppChrome";
 
 export const metadata: Metadata = {
   title: "obsrv — see before you sign",
@@ -25,7 +27,8 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <div id="app-root">{children}</div>
+        <ObsrvBoot />
+        <AppChrome>{children}</AppChrome>
         <AlertContainer />
       </body>
     </html>

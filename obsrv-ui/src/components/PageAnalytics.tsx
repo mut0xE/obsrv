@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { api, ApiError } from "@/lib/api";
 import { useAlerts } from "./ErrorAlert";
 import {
@@ -814,7 +814,7 @@ function ProgramTab() {
                       <td className="num"><span style={{ color: failed > 0 ? "var(--critical)" : "var(--text-tertiary)" }}>{failed.toLocaleString()}</span> <span style={{ color: failPct > 1 ? "var(--warning)" : "var(--text-tertiary)", marginLeft: 6, fontSize: 11 }}>({failPct.toFixed(1)}%)</span></td>
                       <td className="num">{Number(avgCu).toLocaleString()}</td>
                       <td className="num">
-                        {callers === 0 || callers == null ? (
+                        {callers == null ? (
                           <span style={{ color: "var(--text-tertiary)" }}>—</span>
                         ) : (
                           Number(callers).toLocaleString()
@@ -1051,7 +1051,7 @@ function ProgramTab() {
                                   ix.unique_signers ??
                                   ix.caller_count ??
                                   ix.signers;
-                                return c == null || c === 0 ? (
+                                return c == null ? (
                                   <span style={{ color: "var(--text-tertiary)" }}>—</span>
                                 ) : (
                                   Number(c).toLocaleString()

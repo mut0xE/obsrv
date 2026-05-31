@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT wallet, user_id, telegram_chat_id, alert_threshold, active, created_at\n        FROM watched_wallets\n        WHERE user_id = $1\n          AND wallet  = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "wallet",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "telegram_chat_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "alert_threshold",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "25ce1e06ddad09c90e2737e00838ad58c6d2e812d381fe44ba0c6a0a4a2bf14b"
+}

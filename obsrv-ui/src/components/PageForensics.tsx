@@ -130,7 +130,8 @@ export function PageForensics() {
     }
   }
 
-  // balances flattened
+  // Flatten the backend's `balances.changes` into one row per (account, asset).
+  // Field names match `obsrv-core::types::{SolChange,TokenChange}` exactly.
   const balances: {
     addr: string;
     label?: string;
@@ -145,22 +146,20 @@ export function PageForensics() {
         balances.push({
           addr: c.address,
           label: c.label,
-          before: (c.sol.pre ?? 0) / 1e9,
-          after: (c.sol.post ?? 0) / 1e9,
-          change: (c.sol.change ?? 0) / 1e9,
+          before: Number(c.sol.pre_sol ?? 0),
+          after: Number(c.sol.post_sol ?? 0),
+          change: Number(c.sol.change_sol ?? 0),
           sym: "SOL",
         });
       }
       for (const tok of c.tokens ?? []) {
-        const decimals = tok.decimals ?? 6;
-        const divisor = Math.pow(10, decimals);
         balances.push({
-          addr: tok.address ?? c.address,
-          label: tok.label,
-          before: Number(tok.pre_amount ?? 0) / divisor,
-          after: Number(tok.post_amount ?? 0) / divisor,
-          change: Number(tok.change ?? 0) / divisor,
-          sym: tok.symbol ?? tok.mint?.slice(0, 4) ?? "TOKEN",
+          addr: c.address,
+          label: tok.owner ? `mint ${tok.mint.slice(0, 4)}…` : undefined,
+          before: Number(tok.pre_ui ?? 0),
+          after: Number(tok.post_ui ?? 0),
+          change: Number(tok.change_ui ?? 0),
+          sym: tok.mint ? `${tok.mint.slice(0, 4)}…${tok.mint.slice(-4)}` : "TOKEN",
         });
       }
     }
@@ -187,10 +186,6 @@ export function PageForensics() {
               compute usage, balance deltas, inner instructions, and a
               plain-English narration of what really happened.
             </p>
-          </div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <button className="btn btn-ghost btn-sm">Export trace</button>
-            <button className="btn btn-ghost btn-sm">Share permalink</button>
           </div>
         </div>
       </div>
@@ -308,53 +303,59 @@ export function PageForensics() {
               </div>
             </Section>
 
-            {/* Narrative */}
-            {(summary || programs.length > 0) && (
-              <Section kicker="WHAT HAPPENED" title="Plain-English narration">
-                <div className="panel" style={{ padding: "32px 36px" }}>
-                  {summary && (
-                    <p
-                      style={{
-                        fontFamily: "var(--font-sans)",
-                        fontSize: 16,
-                        lineHeight: 1.65,
-                        color: "var(--text-primary)",
-                        maxWidth: 780,
-                      }}
-                    >
-                      {summary}
-                    </p>
-                  )}
-                  {programs.length > 0 && (
+            {/* Narrative — always shown */}
+            <Section kicker="WHAT HAPPENED" title="Plain-English narration">
+              <div className="panel" style={{ padding: "32px 36px" }}>
+                <p
+                  style={{
+                    fontFamily: "var(--font-sans)",
+                    fontSize: 16,
+                    lineHeight: 1.65,
+                    color: summary ? "var(--text-primary)" : "var(--text-tertiary)",
+                    maxWidth: 780,
+                  }}
+                >
+                  {summary ||
+                    "No narration available for this transaction yet."}
+                </p>
+                <div
+                  style={{
+                    marginTop: 24,
+                    paddingTop: 24,
+                    borderTop: "1px solid var(--bg-border)",
+                  }}
+                >
+                  <div className="label" style={{ marginBottom: 12 }}>
+                    PROGRAMS INVOKED · {programs.length}
+                  </div>
+                  {programs.length > 0 ? (
                     <div
+                      style={{ display: "flex", flexWrap: "wrap", gap: 8 }}
+                    >
+                      {programs.map((p, i) => (
+                        <ProgramPill key={i} name={p.name} type={p.type} />
+                      ))}
+                    </div>
+                  ) : (
+                    <span
                       style={{
-                        marginTop: summary ? 24 : 0,
-                        paddingTop: summary ? 24 : 0,
-                        borderTop: summary
-                          ? "1px solid var(--bg-border)"
-                          : "none",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 12,
+                        color: "var(--text-tertiary)",
+                        letterSpacing: "0.08em",
                       }}
                     >
-                      <div className="label" style={{ marginBottom: 12 }}>
-                        PROGRAMS INVOKED · {programs.length}
-                      </div>
-                      <div
-                        style={{ display: "flex", flexWrap: "wrap", gap: 8 }}
-                      >
-                        {programs.map((p, i) => (
-                          <ProgramPill key={i} name={p.name} type={p.type} />
-                        ))}
-                      </div>
-                    </div>
+                      —
+                    </span>
                   )}
                 </div>
-              </Section>
-            )}
+              </div>
+            </Section>
 
-            {/* Balance changes */}
-            {balances.length > 0 && (
-              <Section kicker="STATE CHANGES" title="Balances affected">
-                <div className="panel">
+            {/* Balance changes — always shown */}
+            <Section kicker="STATE CHANGES" title="Balances affected">
+              <div className="panel">
+                {balances.length > 0 ? (
                   <table className="tbl">
                     <thead>
                       <tr>
@@ -403,9 +404,22 @@ export function PageForensics() {
                       ))}
                     </tbody>
                   </table>
-                </div>
-              </Section>
-            )}
+                ) : (
+                  <div
+                    style={{
+                      padding: "48px 32px",
+                      textAlign: "center",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 12,
+                      color: "var(--text-tertiary)",
+                      letterSpacing: "0.1em",
+                    }}
+                  >
+                    NO BALANCE CHANGES DETECTED FOR THIS TRANSACTION
+                  </div>
+                )}
+              </div>
+            </Section>
 
             {/* Logs */}
             {logs.length > 0 && (

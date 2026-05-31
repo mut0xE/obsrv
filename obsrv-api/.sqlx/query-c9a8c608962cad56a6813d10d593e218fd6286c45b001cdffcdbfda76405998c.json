@@ -1,0 +1,82 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT program_id, program_name, total_calls, failed_calls, total_cu,\n               avg_cu, peak_cu, unique_wallets, first_seen, last_seen,\n               COALESCE(risk_distribution, '{}'::jsonb) as \"risk_distribution!: JsonValue\"\n        FROM program_analytics\n        ORDER BY total_calls DESC\n        LIMIT $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "program_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "program_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "total_calls",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "failed_calls",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "total_cu",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "avg_cu",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 6,
+        "name": "peak_cu",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "unique_wallets",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "first_seen",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "last_seen",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "risk_distribution!: JsonValue",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "c9a8c608962cad56a6813d10d593e218fd6286c45b001cdffcdbfda76405998c"
+}

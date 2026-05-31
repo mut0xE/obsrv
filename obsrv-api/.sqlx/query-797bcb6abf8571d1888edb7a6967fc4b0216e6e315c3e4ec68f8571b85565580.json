@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE watched_wallets\n        SET active = FALSE\n        WHERE user_id = $1\n          AND wallet  = $2\n          AND active  = TRUE\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "797bcb6abf8571d1888edb7a6967fc4b0216e6e315c3e4ec68f8571b85565580"
+}

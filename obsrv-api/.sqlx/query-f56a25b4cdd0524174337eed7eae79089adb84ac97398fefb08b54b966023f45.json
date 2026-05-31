@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO wallet_analytics\n                (wallet, total_txs, failed_txs, total_cu, avg_cu,\n                 total_fees, high_risk_txs, last_updated, risk_distribution)\n            VALUES ($1, 1, $2, $3, $4, $5, $6, $7, jsonb_build_object($8::text, 1))\n            ON CONFLICT(wallet) DO UPDATE SET\n                total_txs     = wallet_analytics.total_txs + 1,\n                failed_txs    = wallet_analytics.failed_txs + $2,\n                total_cu      = wallet_analytics.total_cu + $3,\n                avg_cu        = (wallet_analytics.total_cu + $3)::float8\n                                / (wallet_analytics.total_txs + 1),\n                total_fees    = wallet_analytics.total_fees + $5,\n                high_risk_txs = wallet_analytics.high_risk_txs + $6,\n                last_updated  = $7,\n                risk_distribution = jsonb_set(\n                    COALESCE(wallet_analytics.risk_distribution, '{}'::jsonb),\n                    ARRAY[$8::text],\n                    to_jsonb(COALESCE((wallet_analytics.risk_distribution->>$8)::bigint, 0) + 1)\n                )\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Int8",
+        "Float8",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f56a25b4cdd0524174337eed7eae79089adb84ac97398fefb08b54b966023f45"
+}

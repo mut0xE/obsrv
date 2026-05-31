@@ -1,0 +1,82 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT program_id, instruction_type,\n               call_count::bigint as \"call_count!\",\n               failed_count::bigint as \"failed_count!\",\n               total_cu::bigint as \"total_cu!\",\n               avg_cu::float8 as \"avg_cu!\",\n               peak_cu::bigint as \"peak_cu!\",\n               unique_callers::bigint as \"unique_callers!\",\n               first_called::bigint as first_called,\n               last_called::bigint as last_called,\n               COALESCE(risk_distribution, '{}'::jsonb) as \"risk_distribution!: JsonValue\"\n        FROM instruction_analytics\n        WHERE program_id = $1\n        ORDER BY call_count DESC\n        LIMIT 50\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "program_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "instruction_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "call_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "failed_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "total_cu!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "avg_cu!",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 6,
+        "name": "peak_cu!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "unique_callers!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "first_called",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "last_called",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "risk_distribution!: JsonValue",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "99da682c833c6e27672547932528f7c82b20edb186fd39e54b7a11eb1f02cc03"
+}

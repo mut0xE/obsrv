@@ -127,8 +127,13 @@ pub async fn process_transaction(
 
     // ── 5. Determine which watched wallets/programs matched ──
 
-    let watched_wallets = queries::get_watched_wallets(pool).await.unwrap_or_default();
-    let watched_programs = queries::get_watched_programs(pool)
+    // Stream processor needs the global "watched by anyone" list — a single
+    // tx might match different users' rows. Per-user fan-out happens later
+    // when each subscriber reads the broadcast.
+    let watched_wallets = queries::get_all_watched_wallets(pool)
+        .await
+        .unwrap_or_default();
+    let watched_programs = queries::get_all_watched_programs(pool)
         .await
         .unwrap_or_default();
 

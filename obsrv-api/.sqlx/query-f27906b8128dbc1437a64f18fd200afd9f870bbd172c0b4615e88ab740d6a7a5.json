@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE watched_programs\n        SET active = FALSE\n        WHERE user_id    = $1\n          AND program_id = $2\n          AND active     = TRUE\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f27906b8128dbc1437a64f18fd200afd9f870bbd172c0b4615e88ab740d6a7a5"
+}

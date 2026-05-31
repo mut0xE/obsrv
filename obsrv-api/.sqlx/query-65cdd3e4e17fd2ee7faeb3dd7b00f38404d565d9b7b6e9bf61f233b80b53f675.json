@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO watched_programs\n            (user_id, program_id, name, active, created_at)\n        VALUES ($1, $2, $3, TRUE, $4)\n\n        ON CONFLICT (user_id, program_id)\n        DO UPDATE SET\n            name = COALESCE(EXCLUDED.name, watched_programs.name),\n            active = TRUE\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "65cdd3e4e17fd2ee7faeb3dd7b00f38404d565d9b7b6e9bf61f233b80b53f675"
+}

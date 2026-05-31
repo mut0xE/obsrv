@@ -6,6 +6,7 @@ use sqlx::postgres::PgPoolOptions;
 use tokio::sync::broadcast;
 use tower_http::cors::{Any, CorsLayer};
 
+mod auth;
 mod config;
 mod db;
 mod errors;

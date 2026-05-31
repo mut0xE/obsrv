@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { api, ApiError, connectWs } from "@/lib/api";
+import React, { useState } from "react";
+import { api, ApiError } from "@/lib/api";
 import { useAlerts } from "./ErrorAlert";
 import {
   AddressDisplay,
@@ -9,50 +9,10 @@ import {
   StaticDot,
   RiskBadge,
 } from "@/lib/components";
-
-// ── types ──────────────────────────────────────────────────────────
-interface FeedEntry {
-  t: string;
-  wallet: string;
-  program: string;
-  risk: number;
-  summary: string;
-  sev: "critical" | "warning" | "safe" | "info";
-  _new?: boolean;
-  signature?: string;
-}
+import { useObsrv } from "@/lib/store";
+import { readWalletAuth, onAuthChange } from "@/lib/wallet-auth";
 
 // ── helpers ────────────────────────────────────────────────────────
-function sevFromRisk(risk: number): FeedEntry["sev"] {
-  if (risk >= 8) return "critical";
-  if (risk >= 5) return "warning";
-  if (risk >= 3) return "info";
-  return "safe";
-}
-
-function nowTime() {
-  const d = new Date();
-  return [d.getHours(), d.getMinutes(), d.getSeconds()]
-    .map((n) => String(n).padStart(2, "0"))
-    .join(":");
-}
-
-// Strip per-instruction detail, "Risk score: …", and "Fee payer: …" so the
-// live feed shows a clean one-liner instead of a multi-paragraph message.
-function cleanSummary(s?: string): string {
-  if (!s) return "";
-  let out = s;
-  const ixIdx = out.search(/Instruction\s+\d+\s*:/i);
-  if (ixIdx > 0) out = out.slice(0, ixIdx);
-  const riskIdx = out.search(/Risk\s+score\s*:/i);
-  if (riskIdx > 0) out = out.slice(0, riskIdx);
-  const feeIdx = out.search(/Fee\s+payer\s*:/i);
-  if (feeIdx > 0) out = out.slice(0, feeIdx);
-  out = out.replace(/^[^\w(]+/, "").replace(/\s+/g, " ").trim();
-  if (out.length > 120) out = out.slice(0, 117) + "…";
-  return out || "Transaction processed";
-}
-
 function sinceFromAddedAt(addedAt?: number) {
   if (!addedAt) return "—";
   const ms = Date.now() - addedAt;
@@ -412,28 +372,31 @@ function AddMonitorForm({
   const [address, setAddress] = useState("");
   const [label, setLabel] = useState("");
   const [watchIx, setWatchIx] = useState("");
-  const [telegramChatId, setTelegramChatId] = useState("");
   const [threshold, setThreshold] = useState(7);
-  const [channels, setChannels] = useState({
-    telegram: true,
-    email: false,
-    webhook: false,
-  });
   const [loading, setLoading] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
   const { showError, showSuccess } = useAlerts();
   const isProgram = mode === "program";
 
+  React.useEffect(() => {
+    setSignedIn(!!readWalletAuth());
+    return onAuthChange(() => setSignedIn(!!readWalletAuth()));
+  }, []);
+
   async function handleAdd() {
     if (!address.trim()) return;
+    if (!signedIn) {
+      showError(
+        "Connect a wallet first",
+        "Use the Connect button in the sidebar — your wallet signs in so only you see what you're monitoring.",
+      );
+      return;
+    }
     setLoading(true);
     try {
       const addr = address.trim();
       if (mode === "wallet") {
-        const resp: any = await api.addWallet(
-          addr,
-          channels.telegram ? telegramChatId.trim() || undefined : undefined,
-          threshold,
-        );
+        const resp: any = await api.addWallet(addr, undefined, threshold);
         showSuccess(resp?.message || "Wallet added to monitor list");
       } else {
         const resp: any = await api.addProgram(addr, label.trim() || undefined);
@@ -442,7 +405,6 @@ function AddMonitorForm({
       setAddress("");
       setLabel("");
       setWatchIx("");
-      setTelegramChatId("");
       await onAdded();
     } catch (err) {
       showError(
@@ -594,18 +556,12 @@ function AddMonitorForm({
             </div>
             <div style={{ border: "1px solid var(--bg-border-strong)" }}>
               {[
-                { k: "telegram" as const, l: "Telegram" },
-                { k: "email" as const, l: "Email" },
-                { k: "webhook" as const, l: "Webhook" },
+                { k: "telegram" as const, l: "Telegram", upcoming: true },
+                { k: "email" as const, l: "Email", upcoming: true },
+                { k: "webhook" as const, l: "Webhook", upcoming: true },
               ].map((c, i, arr) => {
-                const enabled = channels[c.k];
-                const placeholderByKey: Record<string, string> = {
-                  telegram: "@your_chat_id",
-                  email: "ops@domain.com",
-                  webhook: "POST https://…",
-                };
                 return (
-                  <label
+                  <div
                     key={c.k}
                     style={{
                       display: "grid",
@@ -617,16 +573,14 @@ function AddMonitorForm({
                         i < arr.length - 1
                           ? "1px solid var(--bg-border)"
                           : "none",
-                      cursor: "pointer",
-                      background: enabled ? "var(--bg-surface)" : "transparent",
+                      opacity: 0.55,
+                      cursor: "not-allowed",
                     }}
                   >
                     <input
                       type="checkbox"
-                      checked={enabled}
-                      onChange={() =>
-                        setChannels({ ...channels, [c.k]: !enabled })
-                      }
+                      checked={false}
+                      disabled
                       style={{ accentColor: "var(--safe)" }}
                     />
                     <span
@@ -638,36 +592,42 @@ function AddMonitorForm({
                     >
                       {c.l}
                     </span>
-                    {c.k === "telegram" && enabled ? (
-                      <input
-                        value={telegramChatId}
-                        onChange={(e) => setTelegramChatId(e.target.value)}
-                        placeholder={placeholderByKey[c.k]}
-                        style={{
-                          fontFamily: "var(--font-mono)",
-                          fontSize: 10,
-                          color: "var(--text-secondary)",
-                          background: "transparent",
-                          border: "none",
-                          textAlign: "right",
-                          width: 140,
-                        }}
-                      />
-                    ) : (
-                      <span
-                        style={{
-                          fontFamily: "var(--font-mono)",
-                          fontSize: 10,
-                          color: "var(--text-tertiary)",
-                        }}
-                      >
-                        {placeholderByKey[c.k]}
-                      </span>
-                    )}
-                  </label>
+                    <span
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 9,
+                        letterSpacing: "0.14em",
+                        color: "var(--gold)",
+                        background: "var(--gold-dim)",
+                        border: "1px solid var(--gold)",
+                        padding: "2px 6px",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      Upcoming
+                    </span>
+                  </div>
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {!signedIn && (
+          <div
+            style={{
+              padding: "12px 14px",
+              border: "1px solid var(--warning)",
+              background: "var(--warning-dim)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              color: "var(--warning)",
+              letterSpacing: "0.04em",
+              lineHeight: 1.55,
+            }}
+          >
+            Connect a wallet in the sidebar to start monitoring — your wallet
+            signs in so the list stays scoped to you only.
           </div>
         )}
 
@@ -675,12 +635,14 @@ function AddMonitorForm({
           className="btn btn-safe"
           style={{ width: "100%", justifyContent: "center", padding: "14px" }}
           onClick={handleAdd}
-          disabled={loading || !address.trim()}
+          disabled={loading || !address.trim() || !signedIn}
         >
           {loading ? (
             <>
               Adding<span className="blink">_</span>
             </>
+          ) : !signedIn ? (
+            "Connect wallet to monitor"
           ) : (
             `▸ Start monitoring ${isProgram ? "program" : "wallet"}`
           )}
@@ -690,85 +652,20 @@ function AddMonitorForm({
   );
 }
 
-// ── LIVE FEED ──────────────────────────────────────────────────────
+// ── LIVE FEED (reads persistent state from the Zustand store) ──────
 function LiveFeed({ mode }: { mode: "wallet" | "program" }) {
-  const [feed, setFeed] = useState<FeedEntry[]>([]);
-  const [paused, setPaused] = useState(false);
-  const [connected, setConnected] = useState(false);
-  const pausedRef = React.useRef(paused);
-  pausedRef.current = paused;
-  const feedBufferRef = React.useRef<any[]>([]);
+  const walletFeed = useObsrv((s) => s.walletFeed);
+  const programFeed = useObsrv((s) => s.programFeed);
+  const connected = useObsrv((s) => s.wsConnected);
+  const paused = useObsrv((s) => s.paused);
+  const setPaused = useObsrv((s) => s.setPaused);
 
-  useEffect(() => {
-    const flush = setInterval(() => {
-      if (pausedRef.current || feedBufferRef.current.length === 0) return;
-      const toProcess = feedBufferRef.current.splice(0, 5);
-      setFeed((prev) =>
-        [
-          ...toProcess.map((data: any) => {
-            const risk = Math.round(
-              data.risk ?? data.risk_score ?? data.analysis?.risk_score ?? 0,
-            );
-            const wallet = data.wallet ?? data.fee_payer ?? "";
-            const shortWallet =
-              wallet.length > 8
-                ? wallet.slice(0, 4) + "…" + wallet.slice(-4)
-                : wallet || "—";
-            const program =
-              data.program_id ??
-              data.program ??
-              data.analysis?.programs?.[0] ??
-              "";
-            const shortProgram =
-              program.length > 8
-                ? program.slice(0, 4) + "…" + program.slice(-4)
-                : program || "—";
-            return {
-              t: nowTime(),
-              wallet: shortWallet,
-              program: shortProgram,
-              risk,
-              summary: cleanSummary(
-                data.summary ??
-                  data.analysis?.summary ??
-                  data.description,
-              ),
-              sev: sevFromRisk(risk),
-              _new: true,
-              signature: data.signature,
-            } as FeedEntry;
-          }),
-          ...prev,
-        ].slice(0, 16),
-      );
-    }, 800);
-    return () => clearInterval(flush);
-  }, []);
+  const feed = mode === "wallet" ? walletFeed : programFeed;
 
-  useEffect(() => {
-    let ws: WebSocket | null = null;
-    try {
-      ws = connectWs((data: any) => {
-        const isEvent =
-          data?.signature ||
-          data?.type === "tx_processed" ||
-          data?.type === "alert" ||
-          data?.type === "transaction";
-        if (!isEvent) return;
-        const hasWallet = data.wallet || data.fee_payer;
-        const hasProgram =
-          data.program_id ||
-          data.program ||
-          data.analysis?.programs?.length > 0;
-        if (mode === "wallet" && !hasWallet) return;
-        if (mode === "program" && !hasProgram) return;
-        feedBufferRef.current.push(data);
-      });
-      ws.onopen = () => setConnected(true);
-      ws.onclose = () => setConnected(false);
-    } catch {}
-    return () => ws?.close();
-  }, [mode]);
+  function copy(text?: string) {
+    if (!text) return;
+    navigator.clipboard?.writeText(text);
+  }
 
   return (
     <div className="panel">
@@ -776,7 +673,8 @@ function LiveFeed({ mode }: { mode: "wallet" | "program" }) {
         <PulseDot color={connected ? "safe" : "critical"} />
         <span className="panel-title">Live activity</span>
         <span className="panel-sub">
-          — {connected ? "websocket connected" : "connecting…"}
+          — {connected ? "websocket connected" : "connecting…"} ·{" "}
+          {mode === "wallet" ? "wallet stream" : "program stream"}
         </span>
         <div
           style={{
@@ -806,56 +704,109 @@ function LiveFeed({ mode }: { mode: "wallet" | "program" }) {
             letterSpacing: "0.1em",
           }}
         >
-          WAITING FOR TRANSACTIONS<span className="blink">_</span>
+          WAITING FOR{" "}
+          {mode === "wallet" ? "WALLET" : "PROGRAM"} TRANSACTIONS
+          <span className="blink">_</span>
         </div>
       ) : (
-        <div style={{ maxHeight: 380, overflowY: "auto" }}>
-          {feed.map((e, i) => (
-            <div
-              key={`${e.t}-${i}`}
-              className={i === 0 && e._new ? "entry-enter" : ""}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "3px 96px 120px 84px 1fr",
-                gap: 18,
-                padding: "15px 28px",
-                borderBottom: "1px solid var(--bg-border)",
-                alignItems: "center",
-              }}
-            >
-              <div className={`sev-bar ${e.sev}`} style={{ height: 18 }} />
-              <span
+        <div style={{ maxHeight: 420, overflowY: "auto" }}>
+          {feed.map((e, i) => {
+            const tagAddr = e.matchedAddress ?? (mode === "wallet" ? e.walletFull : e.programFull);
+            const tagShort = tagAddr
+              ? tagAddr.length > 8
+                ? `${tagAddr.slice(0, 4)}…${tagAddr.slice(-4)}`
+                : tagAddr
+              : "—";
+            return (
+              <div
+                key={`${e.t}-${e.signature ?? i}`}
+                className={i === 0 ? "entry-enter" : ""}
                 style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 12,
-                  color: "var(--text-tertiary)",
+                  display: "grid",
+                  gridTemplateColumns: "3px 78px 1fr 70px 1fr 30px",
+                  gap: 14,
+                  padding: "14px 24px",
+                  borderBottom: "1px solid var(--bg-border)",
+                  alignItems: "center",
                 }}
               >
-                {e.t}
-              </span>
-              <span
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 12,
-                  color: "var(--text-primary)",
-                }}
-              >
-                {e.wallet}
-              </span>
-              <RiskBadge level={e.sev} size="sm">
-                {e.risk}/10
-              </RiskBadge>
-              <span
-                style={{
-                  fontFamily: "var(--font-sans)",
-                  fontSize: 13,
-                  color: "var(--text-primary)",
-                }}
-              >
-                {e.summary}
-              </span>
-            </div>
-          ))}
+                <div className={`sev-bar ${e.sev}`} style={{ height: 28 }} />
+                <span
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 12,
+                    color: "var(--text-tertiary)",
+                  }}
+                >
+                  {e.t}
+                </span>
+                {/* matched entity tag */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    minWidth: 0,
+                  }}
+                  title={tagAddr || ""}
+                >
+                  <span
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 9,
+                      letterSpacing: "0.12em",
+                      color: "var(--gold)",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {mode === "wallet" ? "WALLET" : "PROGRAM"}
+                    {e.matchedLabel ? ` · ${e.matchedLabel}` : ""}
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 12,
+                      color: "var(--text-primary)",
+                      marginTop: 2,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {tagShort}
+                  </span>
+                </div>
+                <RiskBadge level={e.sev} size="sm">
+                  {e.risk}/10
+                </RiskBadge>
+                <span
+                  style={{
+                    fontFamily: "var(--font-sans)",
+                    fontSize: 13,
+                    color: "var(--text-primary)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                  title={e.summary + (e.signature ? `\nsig: ${e.signature}` : "")}
+                >
+                  {e.summary}
+                </span>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ padding: "4px 6px", fontSize: 13 }}
+                  title={
+                    e.signature
+                      ? `Copy transaction signature\n${e.signature}`
+                      : "No signature available"
+                  }
+                  disabled={!e.signature}
+                  onClick={() => copy(e.signature)}
+                >
+                  ⎘
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -865,38 +816,15 @@ function LiveFeed({ mode }: { mode: "wallet" | "program" }) {
 // ── MAIN ───────────────────────────────────────────────────────────
 export function PageMonitor() {
   const [mode, setMode] = useState<"wallet" | "program">("wallet");
-  const [loading, setLoading] = useState(false);
   const { showError, showSuccess } = useAlerts();
 
-  useEffect(() => {
-    fetchList();
-    // Poll the DB every 5s so newly-added wallets/programs (and external
-    // changes) appear without a manual refresh.
-    const id = setInterval(() => fetchList(), 5000);
-    return () => clearInterval(id);
-  }, []);
+  const wallets = useObsrv((s) => s.wallets);
+  const programs = useObsrv((s) => s.programs);
+  const loading = useObsrv((s) => s.monitorLoading);
+  const fetchList = useObsrv((s) => s.fetchMonitorList);
 
-  const [wallets, setWallets] = useState<any[]>([]);
-  const [programs, setPrograms] = useState<any[]>([]);
-
-  async function fetchList() {
-    setLoading(true);
-    try {
-      const data = await api.getMonitorList();
-      setWallets(data?.wallets ?? []);
-      setPrograms(data?.programs ?? []);
-    } catch (err) {
-      const message =
-        err instanceof ApiError ? err.message : "Failed to fetch monitor list";
-      const detail =
-        err instanceof ApiError && err.data?.timeout
-          ? "Please ensure the obsrv API server is running on localhost:3001"
-          : undefined;
-      showError(message, detail);
-    } finally {
-      setLoading(false);
-    }
-  }
+  // Wallets/programs come from ObsrvBoot's initial fetch and are
+  // re-pulled here only on add/remove or the Refresh button.
 
   async function handleWalletAdded() {
     await fetchList();
@@ -973,7 +901,6 @@ export function PageMonitor() {
                 Upcoming
               </span>
             </button>
-            <button className="btn btn-ghost btn-sm">Export rules</button>
           </div>
         </div>
       </div>

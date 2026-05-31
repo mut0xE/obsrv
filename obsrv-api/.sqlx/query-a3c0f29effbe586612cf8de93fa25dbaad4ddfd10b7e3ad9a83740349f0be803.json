@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT NOT EXISTS(\n                SELECT 1 FROM wallet_program_stats\n                WHERE wallet = $1 AND program_id = $2\n            ) as \"is_new!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_new!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a3c0f29effbe586612cf8de93fa25dbaad4ddfd10b7e3ad9a83740349f0be803"
+}

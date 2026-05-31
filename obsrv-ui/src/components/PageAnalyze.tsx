@@ -10,9 +10,6 @@ import {
   PulseDot,
 } from "@/lib/components";
 
-const SAMPLE_TX_BYTES =
-  "01a7d3c8b2f1e9a04d7c5b1e2f3a8d6c9b4e1f5a2d8c3b7e0a1f4d9c2b5e8a3f7d0c1b4e9a6f2d5c8b3e0a7d1c4b9e2f5a8d6c3b0e7f1a4d9c2b5e8a3f7d0c1b4e9a040100050709a3f1b2e4d6c8…";
-
 // ── helpers ────────────────────────────────────────────────────────
 function Section({
   kicker,
@@ -96,7 +93,6 @@ function InputPanel({
           <div className="panel-title">Paste signature or transaction bytes</div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn btn-ghost btn-sm" onClick={() => setValue(SAMPLE_TX_BYTES)}>Load sample</button>
           <button className="btn btn-ghost btn-sm" onClick={() => setValue("")}>Clear</button>
         </div>
       </div>
@@ -139,19 +135,19 @@ function InputPanel({
 // ── Risk Meter ─────────────────────────────────────────────────────
 function RiskMeter({ score }: { score: number }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4, height: "100%", justifyContent: "center" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 2, justifyContent: "center" }}>
       {Array.from({ length: 10 }).map((_, i) => {
         const seg = 10 - i;
         const on = seg <= score;
         const segColor = seg >= 8 ? "var(--critical)" : seg >= 5 ? "var(--warning)" : "var(--safe)";
         return (
-          <div key={i} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: on ? segColor : "var(--text-quat)", width: 18, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{seg}</span>
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: on ? segColor : "var(--text-quat)", width: 12, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{seg}</span>
             <div style={{
-              width: 56, height: 10,
+              width: 40, height: 5,
               background: on ? segColor : "var(--bg-elevated)",
               opacity: on ? 0.5 + seg / 20 : 1,
-              boxShadow: seg === score ? `0 0 12px ${segColor}` : "none",
+              boxShadow: seg === score ? `0 0 8px ${segColor}` : "none",
               transition: "all 400ms",
             }} />
           </div>
@@ -177,14 +173,30 @@ function VerdictHero({ result, onJump }: { result: any; onJump: () => void }) {
   const critCount = flags.filter((f) => norm(f) === "critical").length;
   const warnCount = flags.filter((f) => norm(f) === "warning").length;
 
-  const headline = result.headline ?? result.summary ?? result.raw?.tx?.analysis?.summary ?? "Analysis complete.";
-  const reasoning = result.reasoning ?? result.raw?.tx?.analysis?.reasoning ?? "";
+  // Keep the verdict block compact: strip per-instruction noise from the
+  // backend summary and cap the displayed text length.
+  function cleanText(s?: string): string {
+    if (!s) return "";
+    let out = s;
+    const ixIdx = out.search(/Instruction\s+\d+\s*:/i);
+    if (ixIdx > 0) out = out.slice(0, ixIdx);
+    const riskIdx = out.search(/Risk\s+score\s*:/i);
+    if (riskIdx > 0) out = out.slice(0, riskIdx);
+    const feeIdx = out.search(/Fee\s+payer\s*:/i);
+    if (feeIdx > 0) out = out.slice(0, feeIdx);
+    return out.replace(/\s+/g, " ").trim();
+  }
+  const rawHeadline = result.headline ?? result.summary ?? result.raw?.tx?.analysis?.summary ?? "Analysis complete.";
+  const headline = cleanText(rawHeadline).slice(0, 180);
+  const reasoning = cleanText(
+    result.reasoning ?? result.raw?.tx?.analysis?.reasoning ?? "",
+  ).slice(0, 220);
 
   return (
     <div
       className={`panel ${level === "critical" ? "crit-glow" : ""}`}
       style={{
-        borderColor: accent, borderLeftWidth: 0,
+        borderColor: accent,
         background: `linear-gradient(115deg, ${dim} 0%, var(--bg-deep) 62%)`,
         position: "relative", overflow: "hidden",
       }}
@@ -197,49 +209,49 @@ function VerdictHero({ result, onJump }: { result: any; onJump: () => void }) {
         <span className="label">RISK ASSESSMENT · MAINNET-BETA</span>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "260px 1fr 220px", alignItems: "stretch" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "180px 1fr 160px", alignItems: "stretch" }}>
         {/* zone 1 — score */}
-        <div style={{ padding: "40px 36px", display: "flex", flexDirection: "column", justifyContent: "center", borderRight: "1px solid var(--bg-border)" }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 120, lineHeight: 0.85, color: accent, fontWeight: 600, letterSpacing: "-0.05em", fontVariantNumeric: "tabular-nums" }}>
+        <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", justifyContent: "center", borderRight: "1px solid var(--bg-border)" }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 64, lineHeight: 0.9, color: accent, fontWeight: 600, letterSpacing: "-0.04em", fontVariantNumeric: "tabular-nums" }}>
             <CountUp target={score} />
           </div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--text-secondary)", letterSpacing: "0.18em", textTransform: "uppercase", marginTop: 14 }}>
-            of 10 · risk score
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)", letterSpacing: "0.18em", textTransform: "uppercase", marginTop: 10 }}>
+            of 10 · risk
           </div>
-          <div style={{ display: "flex", gap: 16, marginTop: 22 }}>
+          <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
             {critCount > 0 && (
               <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span className="dot static" style={{ background: "var(--critical)" }} />
-                <span className="label-strong" style={{ color: "var(--text-secondary)" }}>{critCount} crit</span>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)", letterSpacing: "0.1em", textTransform: "uppercase" }}>{critCount} crit</span>
               </span>
             )}
             {warnCount > 0 && (
               <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span className="dot static" style={{ background: "var(--warning)" }} />
-                <span className="label-strong" style={{ color: "var(--text-secondary)" }}>{warnCount} warn</span>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)", letterSpacing: "0.1em", textTransform: "uppercase" }}>{warnCount} warn</span>
               </span>
             )}
           </div>
         </div>
 
         {/* zone 2 — verdict copy */}
-        <div style={{ padding: "40px 40px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-          <div style={{ fontFamily: "var(--font-sans)", fontWeight: 700, fontSize: 46, color: accent, letterSpacing: "-0.025em", lineHeight: 1.02 }}>{verdict}</div>
-          <div style={{ fontFamily: "var(--font-sans)", fontWeight: 500, fontSize: 21, color: "var(--text-primary)", marginTop: 18, letterSpacing: "-0.01em", lineHeight: 1.4, maxWidth: 560 }}>{headline}</div>
+        <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
+          <div style={{ fontFamily: "var(--font-sans)", fontWeight: 700, fontSize: 26, color: accent, letterSpacing: "-0.02em", lineHeight: 1.05 }}>{verdict}</div>
+          <div style={{ fontFamily: "var(--font-sans)", fontWeight: 500, fontSize: 14, color: "var(--text-primary)", marginTop: 10, lineHeight: 1.4, maxWidth: 640, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{headline}</div>
           {reasoning && (
-            <div style={{ fontFamily: "var(--font-sans)", fontSize: 15, color: "var(--text-secondary)", marginTop: 14, lineHeight: 1.6, maxWidth: 560 }}>{reasoning}</div>
+            <div style={{ fontFamily: "var(--font-sans)", fontSize: 12, color: "var(--text-secondary)", marginTop: 6, lineHeight: 1.5, maxWidth: 640, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{reasoning}</div>
           )}
-          <div style={{ display: "flex", gap: 10, marginTop: 30 }}>
+          <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
             {level === "critical" && (
-              <button className="btn btn-critical" style={{ padding: "14px 24px" }}>Reject &amp; quarantine</button>
+              <button className="btn btn-critical btn-sm" style={{ padding: "8px 14px" }}>Reject &amp; quarantine</button>
             )}
-            <button className="btn btn-ghost" style={{ padding: "14px 24px", border: "1px solid var(--bg-border-strong)" }} onClick={onJump}>Jump to evidence ↓</button>
+            <button className="btn btn-ghost btn-sm" style={{ padding: "8px 14px", border: "1px solid var(--bg-border-strong)" }} onClick={onJump}>Jump to evidence ↓</button>
           </div>
         </div>
 
         {/* zone 3 — risk meter */}
-        <div style={{ padding: "36px 32px", display: "flex", flexDirection: "column", justifyContent: "center", borderLeft: "1px solid var(--bg-border)", background: "rgba(0,0,0,0.15)" }}>
-          <div className="label" style={{ marginBottom: 18, textAlign: "center" }}>RISK SCALE</div>
+        <div style={{ padding: "16px 16px", display: "flex", flexDirection: "column", justifyContent: "center", borderLeft: "1px solid var(--bg-border)", background: "rgba(0,0,0,0.15)" }}>
+          <div className="label" style={{ marginBottom: 8, textAlign: "center", fontSize: 9 }}>RISK SCALE</div>
           <RiskMeter score={score} />
         </div>
       </div>
@@ -577,10 +589,6 @@ export function PageAnalyze() {
             <div className="label">ANALYZE</div>
             <h1>Inspect a transaction before you sign it</h1>
             <p>Paste a signature or raw bytes. obsrv decompiles every instruction, simulates against the live cluster, and tells you in plain language exactly what will happen.</p>
-          </div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <button className="btn btn-ghost btn-sm">⌘K · History</button>
-            <button className="btn btn-ghost btn-sm">Export report</button>
           </div>
         </div>
       </div>

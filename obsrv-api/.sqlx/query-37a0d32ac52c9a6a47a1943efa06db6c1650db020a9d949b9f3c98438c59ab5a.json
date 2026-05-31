@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO watched_wallets\n            (user_id, wallet, telegram_chat_id, alert_threshold, active, created_at)\n        VALUES ($1, $2, $3, $4, TRUE, $5)\n\n        ON CONFLICT (user_id, wallet)\n        DO UPDATE SET\n            telegram_chat_id = EXCLUDED.telegram_chat_id,\n            alert_threshold  = EXCLUDED.alert_threshold,\n            active            = TRUE\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "37a0d32ac52c9a6a47a1943efa06db6c1650db020a9d949b9f3c98438c59ab5a"
+}

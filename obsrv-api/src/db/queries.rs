@@ -6,6 +6,7 @@ use sqlx::PgPool;
 #[derive(Debug, sqlx::FromRow)]
 pub struct WatchedWallet {
     pub wallet: String,
+    pub user_id: String,
     pub telegram_chat_id: Option<String>,
     pub alert_threshold: i32,
     pub active: bool,
@@ -14,6 +15,7 @@ pub struct WatchedWallet {
 
 pub async fn insert_watched_wallet(
     pool: &PgPool,
+    user_id: &str,
     wallet: &str,
     telegram_chat_id: &Option<String>,
     alert_threshold: i32,
@@ -23,15 +25,15 @@ pub async fn insert_watched_wallet(
     sqlx::query!(
         r#"
         INSERT INTO watched_wallets
-            (wallet, telegram_chat_id, alert_threshold, active, created_at)
-        VALUES ($1, $2, $3, TRUE, $4)
-
-        ON CONFLICT(wallet)
+            (user_id, wallet, telegram_chat_id, alert_threshold, active, created_at)
+        VALUES ($1, $2, $3, $4, TRUE, $5)
+        ON CONFLICT ON CONSTRAINT watched_wallets_pkey
         DO UPDATE SET
             telegram_chat_id = EXCLUDED.telegram_chat_id,
             alert_threshold  = EXCLUDED.alert_threshold,
-            active            = TRUE
+            active           = TRUE
         "#,
+        user_id,
         wallet,
         telegram_chat_id.as_deref(),
         alert_threshold,
@@ -43,11 +45,32 @@ pub async fn insert_watched_wallet(
     Ok(())
 }
 
-pub async fn get_watched_wallets(pool: &PgPool) -> Result<Vec<WatchedWallet>, sqlx::Error> {
+/// All wallets watched by a single user.
+pub async fn get_watched_wallets(
+    pool: &PgPool,
+    user_id: &str,
+) -> Result<Vec<WatchedWallet>, sqlx::Error> {
     sqlx::query_as!(
         WatchedWallet,
         r#"
-        SELECT wallet, telegram_chat_id, alert_threshold, active, created_at
+        SELECT wallet, user_id, telegram_chat_id, alert_threshold, active, created_at
+        FROM watched_wallets
+        WHERE active = TRUE
+          AND user_id = $1
+        "#,
+        user_id,
+    )
+    .fetch_all(pool)
+    .await
+}
+
+/// All wallets watched by *anyone* — used by the stream processor when
+/// deciding whether to broadcast an incoming transaction.
+pub async fn get_all_watched_wallets(pool: &PgPool) -> Result<Vec<WatchedWallet>, sqlx::Error> {
+    sqlx::query_as!(
+        WatchedWallet,
+        r#"
+        SELECT wallet, user_id, telegram_chat_id, alert_threshold, active, created_at
         FROM watched_wallets
         WHERE active = TRUE
         "#
@@ -56,15 +79,21 @@ pub async fn get_watched_wallets(pool: &PgPool) -> Result<Vec<WatchedWallet>, sq
     .await
 }
 
-pub async fn deactivate_watched_wallet(pool: &PgPool, wallet: &str) -> Result<bool, sqlx::Error> {
+pub async fn deactivate_watched_wallet(
+    pool: &PgPool,
+    user_id: &str,
+    wallet: &str,
+) -> Result<bool, sqlx::Error> {
     let result = sqlx::query!(
         r#"
         UPDATE watched_wallets
         SET active = FALSE
-        WHERE wallet = $1
-        AND active = TRUE
+        WHERE user_id = $1
+          AND wallet  = $2
+          AND active  = TRUE
         "#,
-        wallet
+        user_id,
+        wallet,
     )
     .execute(pool)
     .await?;
@@ -76,6 +105,7 @@ pub async fn deactivate_watched_wallet(pool: &PgPool, wallet: &str) -> Result<bo
 #[derive(Debug, sqlx::FromRow)]
 pub struct WatchedProgram {
     pub program_id: String,
+    pub user_id: String,
     pub name: Option<String>,
     pub active: bool,
     pub created_at: i64,
@@ -83,6 +113,7 @@ pub struct WatchedProgram {
 
 pub async fn insert_watched_program(
     pool: &PgPool,
+    user_id: &str,
     program_id: &str,
     name: Option<&str>,
 ) -> Result<(), sqlx::Error> {
@@ -91,14 +122,14 @@ pub async fn insert_watched_program(
     sqlx::query!(
         r#"
         INSERT INTO watched_programs
-            (program_id, name, active, created_at)
-        VALUES ($1, $2, TRUE, $3)
-
-        ON CONFLICT(program_id)
+            (user_id, program_id, name, active, created_at)
+        VALUES ($1, $2, $3, TRUE, $4)
+        ON CONFLICT ON CONSTRAINT watched_programs_pkey
         DO UPDATE SET
-            name = COALESCE(EXCLUDED.name, watched_programs.name),
+            name   = COALESCE(EXCLUDED.name, watched_programs.name),
             active = TRUE
         "#,
+        user_id,
         program_id,
         name,
         now,
@@ -109,11 +140,31 @@ pub async fn insert_watched_program(
     Ok(())
 }
 
-pub async fn get_watched_programs(pool: &PgPool) -> Result<Vec<WatchedProgram>, sqlx::Error> {
+/// All programs watched by a single user.
+pub async fn get_watched_programs(
+    pool: &PgPool,
+    user_id: &str,
+) -> Result<Vec<WatchedProgram>, sqlx::Error> {
     sqlx::query_as!(
         WatchedProgram,
         r#"
-        SELECT program_id, name, active, created_at
+        SELECT program_id, user_id, name, active, created_at
+        FROM watched_programs
+        WHERE active = TRUE
+          AND user_id = $1
+        "#,
+        user_id,
+    )
+    .fetch_all(pool)
+    .await
+}
+
+/// All programs watched by *anyone* — used by the stream processor.
+pub async fn get_all_watched_programs(pool: &PgPool) -> Result<Vec<WatchedProgram>, sqlx::Error> {
+    sqlx::query_as!(
+        WatchedProgram,
+        r#"
+        SELECT program_id, user_id, name, active, created_at
         FROM watched_programs
         WHERE active = TRUE
         "#
@@ -509,37 +560,49 @@ pub async fn update_stream_checkpoint(pool: &PgPool, last_slot: i64) -> Result<(
 
 pub async fn deactivate_watched_program(
     pool: &PgPool,
+    user_id: &str,
     program_id: &str,
 ) -> Result<bool, sqlx::Error> {
     let result = sqlx::query!(
         r#"
         UPDATE watched_programs
         SET active = FALSE
-        WHERE program_id = $1
-        AND active = TRUE
+        WHERE user_id    = $1
+          AND program_id = $2
+          AND active     = TRUE
         "#,
-        program_id
+        user_id,
+        program_id,
     )
     .execute(pool)
     .await?;
     Ok(result.rows_affected() > 0)
 }
 
-pub async fn get_watched_program(pool: &PgPool, program_id: &str) -> Option<WatchedProgram> {
+/// A single user's row for the given program, if any.
+pub async fn get_watched_program(
+    pool: &PgPool,
+    user_id: &str,
+    program_id: &str,
+) -> Option<WatchedProgram> {
     sqlx::query_as!(
         WatchedProgram,
         r#"
-        SELECT program_id, name, active, created_at
+        SELECT program_id, user_id, name, active, created_at
         FROM watched_programs
-        WHERE program_id = $1
+        WHERE user_id    = $1
+          AND program_id = $2
         "#,
-        program_id
+        user_id,
+        program_id,
     )
     .fetch_optional(pool)
     .await
     .ok()
     .flatten()
 }
+
+/// True when *any* user is watching this program — for the stream processor.
 pub async fn is_program_watched(pool: &PgPool, program_id: &str) -> bool {
     sqlx::query_scalar!(
         r#"SELECT EXISTS(SELECT 1 FROM watched_programs WHERE program_id = $1 AND active = TRUE) as "exists!""#,
@@ -550,15 +613,22 @@ pub async fn is_program_watched(pool: &PgPool, program_id: &str) -> bool {
     .unwrap_or(false)
 }
 
-pub async fn get_watched_wallet(pool: &PgPool, wallet: &str) -> Option<WatchedWallet> {
+/// A single user's row for the given wallet, if any.
+pub async fn get_watched_wallet(
+    pool: &PgPool,
+    user_id: &str,
+    wallet: &str,
+) -> Option<WatchedWallet> {
     sqlx::query_as!(
         WatchedWallet,
         r#"
-        SELECT wallet, telegram_chat_id, alert_threshold, active, created_at
+        SELECT wallet, user_id, telegram_chat_id, alert_threshold, active, created_at
         FROM watched_wallets
-        WHERE wallet = $1
+        WHERE user_id = $1
+          AND wallet  = $2
         "#,
-        wallet
+        user_id,
+        wallet,
     )
     .fetch_optional(pool)
     .await
