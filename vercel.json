@@ -1,7 +1,0 @@
-{
-  "version": 2,
-  "framework": "nextjs",
-  "installCommand": "cd obsrv-ui && bun install",
-  "buildCommand": "cd obsrv-ui && bun run build",
-  "outputDirectory": "obsrv-ui/.next"
-}
