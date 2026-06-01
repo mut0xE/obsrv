@@ -1,92 +1,128 @@
 # obsrv
 
-> Real-time Solana transaction monitoring with risk analysis and Telegram alerts
+Real-time Solana transaction monitoring and risk analysis platform. Analyze, monitor, and stream on-chain activity with instant alerts.
 
-obsrv streams live transactions from the Solana network, decodes every instruction, scores risk, and fires Telegram alerts when monitored wallets or programs exceed your threshold.
+## Features
 
-## What it does
+- **Transaction Analysis** - Decode and risk-score transactions before signing (1-10 scale)
+- **Forensic Inspection** - Deep inspection with execution logs, balance changes, compute usage
+- **Wallet/Program Monitoring** - Per-user watchlists with real-time Yellowstone gRPC streaming
+- **Telegram Alerts** - Instant notifications for high-risk transactions
+- **Analytics Dashboard** - Aggregate stats across wallets, programs, and instruction types
+- **WebSocket Streaming** - Live transaction feed to connected clients
+- **Wallet Authentication** - Solana wallet-based user scoping
 
-| Feature | Description |
-|---|---|
-| **Analyze** | Paste a tx signature → get decoded instructions, risk score, balance changes |
-| **Forensics** | Deep-dive: execution status, CU consumed, failure reason, full logs |
-| **Monitor** | Watch wallets & programs → Telegram alert when risk ≥ threshold |
-| **Analytics** | Aggregate stats per wallet, program, and instruction type |
-| **Live feed** | WebSocket stream of transactions as they land |
+## Architecture
 
-## Stack
-
-- **API** — Rust + Axum, PostgreSQL (sqlx), Yellowstone gRPC, Teloxide (Telegram)
-- **UI** — Next.js 16, TypeScript, Tailwind CSS 4, Zustand
-- **Infra** — Docker Compose (postgres + api + ui)
-
-## Quick start (Docker)
-
-```bash
-cp .env.example .env
-# Fill in RPC_URL and optionally TELEGRAM_BOT_TOKEN
-docker compose up --build
+```
+obsrv-core/     Rust library - transaction decoding, risk scoring, instruction parsing
+obsrv-api/      Rust backend - Axum HTTP/WS server, Yellowstone gRPC streaming, Telegram bot
+obsrv-ui/       Next.js 15 frontend - dashboard with analyze, forensics, monitor, analytics pages
 ```
 
-## Manual setup
+## Tech Stack
 
-### Prerequisites
-- Rust 1.83+
-- Node.js 20+ / Bun
-- PostgreSQL 16
-- (Optional) Yellowstone gRPC endpoint for live streaming
+| Layer | Tech |
+|-------|------|
+| Backend | Rust, Axum, SQLx, Tokio |
+| Streaming | Yellowstone gRPC (Solana) |
+| Database | PostgreSQL (Neon) |
+| Frontend | Next.js 15, React 19, TypeScript, Tailwind CSS 4, Zustand |
+| Alerts | Teloxide (Telegram) |
 
-### API
+## Supported Program Decoders
+
+- System Program (transfers, account creation, nonce ops)
+- SPL Token / Token-2022 (transfers, approvals, authority changes)
+- Compute Budget (unit limits, priority fees)
+
+## Setup
+
+### Backend
 
 ```bash
 cd obsrv-api
-cp ../.env.example .env   # edit DATABASE_URL, RPC_URL
+cargo install sqlx-cli --no-default-features --features postgres
+
+# configure .env
+DATABASE_URL=postgresql://user:pass@host/dbname?sslmode=require
+RPC_URL=https://api.mainnet-beta.solana.com
+PORT=3001                          # optional, default 3001
+GRPC_ENDPOINT=<yellowstone-url>    # optional
+GRPC_X_TOKEN=<token>               # optional
+TELEGRAM_BOT_TOKEN=<token>         # optional
+
+sqlx migrate run
 cargo run --release
 ```
 
-The server auto-runs migrations on startup.
-
-### UI
+### Frontend
 
 ```bash
 cd obsrv-ui
-cp .env.local.example .env.local   # or set NEXT_PUBLIC_API_URL=http://localhost:3001
-npm install
-npm run dev   # dev mode
-# or: npm run build && npm start   # production
+bun install   # or npm install
+
+# configure .env.local
+NEXT_PUBLIC_API_URL=http://localhost:3001
+
+bun dev       # or npm run dev
 ```
 
-## Environment variables
+## API
 
-| Variable | Required | Description |
-|---|---|---|
-| `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `RPC_URL` | Yes | Solana JSON-RPC endpoint |
-| `PORT` | No (3001) | API listen port |
-| `GRPC_ENDPOINT` | No | Yellowstone gRPC for live streaming |
-| `GRPC_X_TOKEN` | No | Yellowstone auth token |
-| `TELEGRAM_BOT_TOKEN` | No | Bot token from @BotFather |
-| `NEXT_PUBLIC_API_URL` | Yes (UI) | API base URL for the frontend |
-
-## API endpoints
+### Analysis
 
 ```
-GET  /health                  — Server status
-POST /analyze                 — Analyze transaction by signature
-POST /forensics               — Deep forensic inspection
-POST /simulate                — Simulate raw transaction
-POST /nonce/inspect           — Inspect nonce account
-POST /monitor/wallet          — Add wallet to watchlist
-POST /monitor/wallet/remove   — Remove wallet from watchlist
-POST /monitor/program         — Add program to watchlist
-POST /monitor/program/remove  — Remove program from watchlist
-GET  /monitor/list            — List active monitors
-GET  /analytics/wallet        — Wallet statistics
-GET  /analytics/programs      — Top programs by usage
-GET  /analytics/alerts        — Alert history
-GET  /stream/transactions     — Recent transactions
-GET  /stream/stats            — Overall statistics
-GET  /ws                      — WebSocket live feed
+POST /analyze              Analyze tx by signature or raw bytes
+POST /forensics            Deep forensic inspection
+POST /simulate             Simulate raw transaction
+POST /nonce/inspect        Inspect durable nonce details
+```
+
+### Monitoring
+
+```
+POST /monitor/wallet           Add wallet to watchlist
+POST /monitor/wallet/remove    Remove wallet
+POST /monitor/program          Add program to watchlist
+POST /monitor/program/remove   Remove program
+GET  /monitor/list             List active monitors
+```
+
+### Analytics
+
+```
+GET /analytics/wallet?wallet=<ADDRESS>      Wallet stats
+GET /analytics/program?program_id=<ID>      Program stats
+GET /analytics/programs                     Top programs by volume
+GET /analytics/alerts                       Alert history
+```
+
+### Streaming
+
+```
+GET /stream/transactions       Recent transactions
+GET /stream/stats              Overall stats
+GET /stream/wallet/history     Wallet tx history
+GET /ws                        WebSocket live feed
+```
+
+## Database
+
+Migrations in `obsrv-api/migrations/`. Key tables:
+
+- `watched_wallets` / `watched_programs` - per-user monitor subscriptions
+- `forensics_history` - analyzed transaction records
+- `wallet_analytics` / `program_analytics` - aggregate stats
+- `instruction_analytics` / `instruction_daily` - instruction-level breakdowns
+
+## Development
+
+```bash
+cargo watch -x run    # backend with hot reload
+cargo test            # run tests
+cargo clippy          # lint
+cargo fmt             # format
 ```
 
 ## License
