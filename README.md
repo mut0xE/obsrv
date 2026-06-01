@@ -28,10 +28,6 @@ cp .env.example .env
 docker compose up --build
 ```
 
-- UI: http://localhost:3000
-- API: http://localhost:3001
-- Health: http://localhost:3001/health
-
 ## Manual setup
 
 ### Prerequisites
@@ -92,13 +88,6 @@ GET  /stream/transactions     — Recent transactions
 GET  /stream/stats            — Overall statistics
 GET  /ws                      — WebSocket live feed
 ```
-
-## Telegram alerts
-
-1. Create a bot via [@BotFather](https://t.me/BotFather) → copy the token
-2. Set `TELEGRAM_BOT_TOKEN` in your `.env`
-3. In the Monitor tab, enter your Telegram chat ID when adding a wallet
-4. Alerts fire when risk score ≥ your chosen threshold (1–10)
 
 ## License
 
